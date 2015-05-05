@@ -145,6 +145,14 @@ enum {
 	LAST_PROP
 };
 
+static const char *valid_values_eap[] = { "leap", "md5", "tls", "peap", "ttls", "sim", "fast", "pwd", NULL };
+static const char *valid_values_phase1_peapver[] = { "0", "1", NULL };
+static const char *valid_values_phase1_peaplabel[] = { "0", "1", NULL };
+static const char *valid_values_phase1_fast_pac[] = { "0", "1", "2", "3", NULL };
+static const char *valid_values_phase2_auth[] = { "pap", "chap", "mschap", "mschapv2", "gtc", "otp", "md5", "tls", NULL };
+static const char *valid_values_phase2_autheap[] = { "md5", "mschapv2", "otp", "gtc", "tls", NULL };
+
+
 /**
  * nm_setting_802_1x_new:
  *
@@ -2696,12 +2704,6 @@ verify (NMSetting *setting, NMConnection *connection, GError **error)
 {
 	NMSetting8021x *self = NM_SETTING_802_1X (setting);
 	NMSetting8021xPrivate *priv = NM_SETTING_802_1X_GET_PRIVATE (self);
-	const char *valid_eap[] = { "leap", "md5", "tls", "peap", "ttls", "sim", "fast", "pwd", NULL };
-	const char *valid_phase1_peapver[] = { "0", "1", NULL };
-	const char *valid_phase1_peaplabel[] = { "0", "1", NULL };
-	const char *valid_phase1_fast_pac[] = { "0", "1", "2", "3", NULL };
-	const char *valid_phase2_auth[] = { "pap", "chap", "mschap", "mschapv2", "gtc", "otp", "md5", "tls", NULL };
-	const char *valid_phase2_autheap[] = { "md5", "mschapv2", "otp", "gtc", "tls", NULL };
 	GSList *iter;
 
 	if (error)
@@ -2715,15 +2717,8 @@ verify (NMSetting *setting, NMConnection *connection, GError **error)
 		g_prefix_error (error, "%s.%s: ", NM_SETTING_802_1X_SETTING_NAME, NM_SETTING_802_1X_EAP);
 		return FALSE;
 	}
-
-	if (!_nm_utils_string_slist_validate (priv->eap, valid_eap)) {
-		g_set_error_literal (error,
-		                     NM_CONNECTION_ERROR,
-		                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
-		                     _("property is invalid"));
-		g_prefix_error (error, "%s.%s: ", NM_SETTING_802_1X_SETTING_NAME, NM_SETTING_802_1X_EAP);
+	if (!_nm_setting_validate_slist_property (setting, NM_SETTING_802_1X_EAP, priv->eap, error))
 		return FALSE;
-	}
 
 	/* Ask each configured EAP method if its valid */
 	for (iter = priv->eap; iter; iter = g_slist_next (iter)) {
@@ -2741,55 +2736,21 @@ verify (NMSetting *setting, NMConnection *connection, GError **error)
 		}
 	}
 
-	if (priv->phase1_peapver && !_nm_utils_string_in_list (priv->phase1_peapver, valid_phase1_peapver)) {
-		g_set_error (error,
-		             NM_CONNECTION_ERROR,
-		             NM_CONNECTION_ERROR_INVALID_PROPERTY,
-		             _("'%s' is not a valid value for the property"),
-		             priv->phase1_peapver);
-		g_prefix_error (error, "%s.%s: ", NM_SETTING_802_1X_SETTING_NAME, NM_SETTING_802_1X_PHASE1_PEAPVER);
+	if (!_nm_setting_validate_string_property (setting, NM_SETTING_802_1X_PHASE1_PEAPVER,
+	                                           priv->phase1_peapver, NULL, error))
 		return FALSE;
-	}
-
-	if (priv->phase1_peaplabel && !_nm_utils_string_in_list (priv->phase1_peaplabel, valid_phase1_peaplabel)) {
-		g_set_error (error,
-		             NM_CONNECTION_ERROR,
-		             NM_CONNECTION_ERROR_INVALID_PROPERTY,
-		             _("'%s' is not a valid value for the property"),
-		             priv->phase1_peaplabel);
-		g_prefix_error (error, "%s.%s: ", NM_SETTING_802_1X_SETTING_NAME, NM_SETTING_802_1X_PHASE1_PEAPLABEL);
+	if (!_nm_setting_validate_string_property (setting, NM_SETTING_802_1X_PHASE1_PEAPLABEL,
+	                                           priv->phase1_peaplabel, NULL, error))
 		return FALSE;
-	}
-
-	if (priv->phase1_fast_provisioning && !_nm_utils_string_in_list (priv->phase1_fast_provisioning, valid_phase1_fast_pac)) {
-		g_set_error (error,
-		             NM_CONNECTION_ERROR,
-		             NM_CONNECTION_ERROR_INVALID_PROPERTY,
-		             _("'%s' is not a valid value for the property"),
-		             priv->phase1_fast_provisioning);
-		g_prefix_error (error, "%s.%s: ", NM_SETTING_802_1X_SETTING_NAME, NM_SETTING_802_1X_PHASE1_FAST_PROVISIONING);
+	if (!_nm_setting_validate_string_property (setting, NM_SETTING_802_1X_PHASE1_FAST_PROVISIONING,
+	                                           priv->phase1_fast_provisioning, NULL, error))
 		return FALSE;
-	}
-
-	if (priv->phase2_auth && !_nm_utils_string_in_list (priv->phase2_auth, valid_phase2_auth)) {
-		g_set_error (error,
-		             NM_CONNECTION_ERROR,
-		             NM_CONNECTION_ERROR_INVALID_PROPERTY,
-		             _("'%s' is not a valid value for the property"),
-		             priv->phase2_auth);
-		g_prefix_error (error, "%s.%s: ", NM_SETTING_802_1X_SETTING_NAME, NM_SETTING_802_1X_PHASE2_AUTH);
+	if (!_nm_setting_validate_string_property (setting, NM_SETTING_802_1X_PHASE2_AUTH,
+	                                           priv->phase2_auth, NULL, error))
 		return FALSE;
-	}
-
-	if (priv->phase2_autheap && !_nm_utils_string_in_list (priv->phase2_autheap, valid_phase2_autheap)) {
-		g_set_error (error,
-		             NM_CONNECTION_ERROR,
-		             NM_CONNECTION_ERROR_INVALID_PROPERTY,
-		             _("'%s' is not a valid value for the property"),
-		             priv->phase2_autheap);
-		g_prefix_error (error, "%s.%s: ", NM_SETTING_802_1X_SETTING_NAME, NM_SETTING_802_1X_PHASE2_AUTHEAP);
+	if (!_nm_setting_validate_string_property (setting, NM_SETTING_802_1X_PHASE2_AUTHEAP,
+	                                           priv->phase2_autheap, NULL, error))
 		return FALSE;
-	}
 
 	if (!verify_cert (priv->ca_cert, NM_SETTING_802_1X_CA_CERT, error))
 		return FALSE;
@@ -3167,6 +3128,7 @@ nm_setting_802_1x_class_init (NMSetting8021xClass *setting_class)
 {
 	GObjectClass *object_class = G_OBJECT_CLASS (setting_class);
 	NMSettingClass *parent_class = NM_SETTING_CLASS (setting_class);
+	GParamSpec *pspec;
 
 	g_type_class_add_private (setting_class, sizeof (NMSetting8021xPrivate));
 
@@ -3197,12 +3159,12 @@ nm_setting_802_1x_class_init (NMSetting8021xClass *setting_class)
 	 * example: IEEE_8021X_EAP_METHODS=PEAP
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_EAP,
-		 g_param_spec_boxed (NM_SETTING_802_1X_EAP, "", "",
+	pspec = g_param_spec_boxed (NM_SETTING_802_1X_EAP, "", "",
 		                     G_TYPE_STRV,
 		                     G_PARAM_READWRITE |
-		                     G_PARAM_STATIC_STRINGS));
+		                     G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_EAP, pspec);
+	_nm_setting_property_set_valid_values (pspec, valid_values_eap);
 
 	/**
 	 * NMSetting8021x:identity:
@@ -3256,12 +3218,12 @@ nm_setting_802_1x_class_init (NMSetting8021xClass *setting_class)
 	 * example: IEEE_8021X_PAC_FILE=/home/joe/my-fast.pac
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_PAC_FILE,
-		 g_param_spec_string (NM_SETTING_802_1X_PAC_FILE, "", "",
-		                      NULL,
-		                      G_PARAM_READWRITE |
-		                      G_PARAM_STATIC_STRINGS));
+	pspec = g_param_spec_string (NM_SETTING_802_1X_PAC_FILE, "", "",
+	                             NULL,
+	                             G_PARAM_READWRITE |
+	                             G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_PAC_FILE, pspec);
+	_nm_setting_property_set_is_filename (pspec);
 
 	/**
 	 * NMSetting8021x:ca-cert:
@@ -3308,12 +3270,12 @@ nm_setting_802_1x_class_init (NMSetting8021xClass *setting_class)
 	 * description: The property is not handled by ifcfg-rh plugin.
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_CA_PATH,
-		 g_param_spec_string (NM_SETTING_802_1X_CA_PATH, "", "",
-		                      NULL,
-		                      G_PARAM_READWRITE |
-		                      G_PARAM_STATIC_STRINGS));
+	pspec = g_param_spec_string (NM_SETTING_802_1X_CA_PATH, "", "",
+	                             NULL,
+	                             G_PARAM_READWRITE |
+	                             G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_CA_PATH, pspec);
+	_nm_setting_property_set_is_filename (pspec);
 
 	/**
 	 * NMSetting8021x:subject-match:
@@ -3404,12 +3366,12 @@ nm_setting_802_1x_class_init (NMSetting8021xClass *setting_class)
 	 * description: Use to force a specific PEAP version.
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_PHASE1_PEAPVER,
-		 g_param_spec_string (NM_SETTING_802_1X_PHASE1_PEAPVER, "", "",
-		                      NULL,
-		                      G_PARAM_READWRITE |
-		                      G_PARAM_STATIC_STRINGS));
+	pspec = g_param_spec_string (NM_SETTING_802_1X_PHASE1_PEAPVER, "", "",
+	                             NULL,
+	                             G_PARAM_READWRITE |
+	                             G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_PHASE1_PEAPVER, pspec);
+	_nm_setting_property_set_valid_values (pspec, valid_values_phase1_peapver);
 
 	/**
 	 * NMSetting8021x:phase1-peaplabel:
@@ -3427,12 +3389,12 @@ nm_setting_802_1x_class_init (NMSetting8021xClass *setting_class)
 	 * description: Use to force the new PEAP label during key derivation.
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_PHASE1_PEAPLABEL,
-		 g_param_spec_string (NM_SETTING_802_1X_PHASE1_PEAPLABEL, "", "",
-		                      NULL,
-		                      G_PARAM_READWRITE |
-		                      G_PARAM_STATIC_STRINGS));
+	pspec = g_param_spec_string (NM_SETTING_802_1X_PHASE1_PEAPLABEL, "", "",
+	                             NULL,
+	                             G_PARAM_READWRITE |
+	                             G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_PHASE1_PEAPLABEL, pspec);
+	_nm_setting_property_set_valid_values (pspec, valid_values_phase1_peaplabel);
 
 	/**
 	 * NMSetting8021x:phase1-fast-provisioning:
@@ -3452,12 +3414,12 @@ nm_setting_802_1x_class_init (NMSetting8021xClass *setting_class)
 	 * example: IEEE_8021X_FAST_PROVISIONING="allow-auth allow-unauth"
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_PHASE1_FAST_PROVISIONING,
-		 g_param_spec_string (NM_SETTING_802_1X_PHASE1_FAST_PROVISIONING, "", "",
-		                      NULL,
-		                      G_PARAM_READWRITE |
-		                      G_PARAM_STATIC_STRINGS));
+	pspec = g_param_spec_string (NM_SETTING_802_1X_PHASE1_FAST_PROVISIONING, "", "",
+	                             NULL,
+	                             G_PARAM_READWRITE |
+	                             G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_PHASE1_FAST_PROVISIONING, pspec);
+	_nm_setting_property_set_valid_values (pspec, valid_values_phase1_fast_pac);
 
 	/**
 	 * NMSetting8021x:phase2-auth:
@@ -3478,12 +3440,12 @@ nm_setting_802_1x_class_init (NMSetting8021xClass *setting_class)
 	 * example: IEEE_8021X_INNER_AUTH_METHODS=PAP
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_PHASE2_AUTH,
-		 g_param_spec_string (NM_SETTING_802_1X_PHASE2_AUTH, "", "",
-		                      NULL,
-		                      G_PARAM_READWRITE |
-		                      G_PARAM_STATIC_STRINGS));
+	pspec = g_param_spec_string (NM_SETTING_802_1X_PHASE2_AUTH, "", "",
+	                             NULL,
+	                             G_PARAM_READWRITE |
+	                             G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_PHASE2_AUTH, pspec);
+	_nm_setting_property_set_valid_values (pspec, valid_values_phase2_auth);
 
 	/**
 	 * NMSetting8021x:phase2-autheap:
@@ -3504,12 +3466,12 @@ nm_setting_802_1x_class_init (NMSetting8021xClass *setting_class)
 	 * example: IEEE_8021X_INNER_AUTH_METHODS="MSCHAPV2 EAP-TLS"
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_PHASE2_AUTHEAP,
-		 g_param_spec_string (NM_SETTING_802_1X_PHASE2_AUTHEAP, "", "",
-		                      NULL,
-		                      G_PARAM_READWRITE |
-		                      G_PARAM_STATIC_STRINGS));
+	pspec = g_param_spec_string (NM_SETTING_802_1X_PHASE2_AUTHEAP, "", "",
+	                             NULL,
+	                             G_PARAM_READWRITE |
+	                             G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_PHASE2_AUTHEAP, pspec);
+	_nm_setting_property_set_valid_values (pspec, valid_values_phase2_autheap);
 
 	/**
 	 * NMSetting8021x:phase2-ca-cert:
@@ -3544,12 +3506,12 @@ nm_setting_802_1x_class_init (NMSetting8021xClass *setting_class)
 	 * certificates to be added to the verification chain in addition to the
 	 * certificate specified in the #NMSetting8021x:phase2-ca-cert property.
 	 **/
-	g_object_class_install_property
-		(object_class, PROP_PHASE2_CA_PATH,
-		 g_param_spec_string (NM_SETTING_802_1X_PHASE2_CA_PATH, "", "",
-		                      NULL,
-		                      G_PARAM_READWRITE |
-		                      G_PARAM_STATIC_STRINGS));
+	pspec = g_param_spec_string (NM_SETTING_802_1X_PHASE2_CA_PATH, "", "",
+	                             NULL,
+	                             G_PARAM_READWRITE |
+	                             G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_PHASE2_CA_PATH, pspec);
+	_nm_setting_property_set_is_filename (pspec);
 
 	/**
 	 * NMSetting8021x:phase2-subject-match:

@@ -45,6 +45,9 @@ G_BEGIN_DECLS
 #define NM_SETTING_INFINIBAND_P_KEY          "p-key"
 #define NM_SETTING_INFINIBAND_PARENT         "parent"
 
+#define NM_SETTING_INFINIBAND_TRANSPORT_MODE_DATAGRAM  "datagram"
+#define NM_SETTING_INFINIBAND_TRANSPORT_MODE_CONNECTED "connected"
+
 struct _NMSettingInfiniband {
 	NMSetting parent;
 };

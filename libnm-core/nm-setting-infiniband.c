@@ -62,6 +62,12 @@ enum {
 	LAST_PROP
 };
 
+static const char *valid_values_transport_type[] = {
+	NM_SETTING_INFINIBAND_TRANSPORT_MODE_DATAGRAM,
+	NM_SETTING_INFINIBAND_TRANSPORT_MODE_CONNECTED,
+	NULL
+};
+
 /**
  * nm_setting_infiniband_new:
  *
@@ -194,10 +200,10 @@ verify (NMSetting *setting, NMConnection *connection, GError **error)
 		return FALSE;
 	}
 
-	if (!g_strcmp0 (priv->transport_mode, "datagram")) {
+	if (!g_strcmp0 (priv->transport_mode, NM_SETTING_INFINIBAND_TRANSPORT_MODE_DATAGRAM)) {
 		if (priv->mtu > 2044)
 			normerr_max_mtu = 2044;
-	} else if (!g_strcmp0 (priv->transport_mode, "connected")) {
+	} else if (!g_strcmp0 (priv->transport_mode, NM_SETTING_INFINIBAND_TRANSPORT_MODE_CONNECTED)) {
 		if (priv->mtu > 65520)
 			normerr_max_mtu = 65520;
 	} else {
@@ -377,6 +383,7 @@ nm_setting_infiniband_class_init (NMSettingInfinibandClass *setting_class)
 {
 	GObjectClass *object_class = G_OBJECT_CLASS (setting_class);
 	NMSettingClass *parent_class = NM_SETTING_CLASS (setting_class);
+	GParamSpec *pspec;
 
 	g_type_class_add_private (setting_class, sizeof (NMSettingInfinibandPrivate));
 
@@ -457,14 +464,14 @@ nm_setting_infiniband_class_init (NMSettingInfinibandClass *setting_class)
 	 *   "datagram" mode
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_TRANSPORT_MODE,
-		 g_param_spec_string (NM_SETTING_INFINIBAND_TRANSPORT_MODE, "", "",
-		                      NULL,
-		                      G_PARAM_READWRITE |
-		                      G_PARAM_CONSTRUCT |
-		                      NM_SETTING_PARAM_INFERRABLE |
-		                      G_PARAM_STATIC_STRINGS));
+	pspec = g_param_spec_string (NM_SETTING_INFINIBAND_TRANSPORT_MODE, "", "",
+	                             NULL,
+	                             G_PARAM_READWRITE |
+	                             G_PARAM_CONSTRUCT |
+	                             NM_SETTING_PARAM_INFERRABLE |
+	                             G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_TRANSPORT_MODE, pspec);
+	_nm_setting_property_set_valid_values (pspec, valid_values_transport_type);
 
 	/**
 	 * NMSettingInfiniband:p-key:

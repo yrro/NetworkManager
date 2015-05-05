@@ -70,6 +70,16 @@ enum {
 	LAST_PROP
 };
 
+static const char *valid_values_method[] = {
+	NM_SETTING_IP6_CONFIG_METHOD_IGNORE,
+	NM_SETTING_IP6_CONFIG_METHOD_AUTO,
+	NM_SETTING_IP6_CONFIG_METHOD_DHCP,
+	NM_SETTING_IP6_CONFIG_METHOD_LINK_LOCAL,
+	NM_SETTING_IP6_CONFIG_METHOD_MANUAL,
+	NM_SETTING_IP6_CONFIG_METHOD_SHARED,
+	NULL
+};
+
 /**
  * nm_setting_ip6_config_new:
  *
@@ -398,6 +408,7 @@ nm_setting_ip6_config_class_init (NMSettingIP6ConfigClass *ip6_class)
 {
 	GObjectClass *object_class = G_OBJECT_CLASS (ip6_class);
 	NMSettingClass *setting_class = NM_SETTING_CLASS (ip6_class);
+	GParamSpec *pspec;
 
 	g_type_class_add_private (ip6_class, sizeof (NMSettingIP6ConfigPrivate));
 
@@ -416,6 +427,8 @@ nm_setting_ip6_config_class_init (NMSettingIP6ConfigClass *ip6_class)
 	 *   ignore ~ IPV6INIT=no; auto ~ IPV6_AUTOCONF=yes; dhcp ~ IPV6_AUTOCONF=no and DHCPV6C=yes
 	 * ---end---
 	 */
+	pspec = g_object_class_find_property (object_class, NM_SETTING_IP_CONFIG_METHOD);
+	_nm_setting_property_set_valid_values (pspec, valid_values_method);
 
 	/* ---keyfile---
 	 * property: dns

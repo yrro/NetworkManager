@@ -95,6 +95,12 @@ enum {
 	LAST_PROP
 };
 
+static const char *valid_values_app_fcoe_mode[] = {
+	NM_SETTING_DCB_FCOE_MODE_FABRIC,
+	NM_SETTING_DCB_FCOE_MODE_VN2VN,
+	NULL
+};
+
 /**
  * nm_setting_dcb_new:
  *
@@ -638,16 +644,9 @@ verify (NMSetting *setting, NMConnection *connection, GError **error)
 		g_prefix_error (error, "%s.%s: ", NM_SETTING_DCB_SETTING_NAME, NM_SETTING_DCB_APP_FCOE_MODE);
 		return FALSE;
 	}
-
-	if (strcmp (priv->app_fcoe_mode, NM_SETTING_DCB_FCOE_MODE_FABRIC) &&
-	    strcmp (priv->app_fcoe_mode, NM_SETTING_DCB_FCOE_MODE_VN2VN)) {
-		g_set_error_literal (error,
-		                     NM_CONNECTION_ERROR,
-		                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
-		                     _("property invalid"));
-		g_prefix_error (error, "%s.%s: ", NM_SETTING_DCB_SETTING_NAME, NM_SETTING_DCB_APP_FCOE_MODE);
+	if (!_nm_setting_validate_string_property (setting, NM_SETTING_DCB_APP_FCOE_MODE,
+	                                           priv->app_fcoe_mode, NULL, error))
 		return FALSE;
-	}
 
 	if (!check_dcb_flags (priv->app_iscsi_flags, NM_SETTING_DCB_APP_ISCSI_FLAGS, error))
 		return FALSE;
@@ -911,6 +910,7 @@ nm_setting_dcb_class_init (NMSettingDcbClass *setting_class)
 {
 	GObjectClass *object_class = G_OBJECT_CLASS (setting_class);
 	NMSettingClass *parent_class = NM_SETTING_CLASS (setting_class);
+	GParamSpec *pspec;
 
 	g_type_class_add_private (setting_class, sizeof (NMSettingDcbPrivate));
 
@@ -980,13 +980,13 @@ nm_setting_dcb_class_init (NMSettingDcbClass *setting_class)
 	 * description: FCoE controller mode.
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_APP_FCOE_MODE,
-		 g_param_spec_string (NM_SETTING_DCB_APP_FCOE_MODE, "", "",
-		                      NM_SETTING_DCB_FCOE_MODE_FABRIC,
-		                      G_PARAM_READWRITE |
-		                      G_PARAM_CONSTRUCT |
-		                      G_PARAM_STATIC_STRINGS));
+	pspec = g_param_spec_string (NM_SETTING_DCB_APP_FCOE_MODE, "", "",
+	                             NM_SETTING_DCB_FCOE_MODE_FABRIC,
+	                             G_PARAM_READWRITE |
+	                             G_PARAM_CONSTRUCT |
+	                             G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_APP_FCOE_MODE, pspec);
+	_nm_setting_property_set_valid_values (pspec, valid_values_app_fcoe_mode);
 
 	/**
 	 * NMSettingDcb:app-iscsi-flags:

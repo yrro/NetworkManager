@@ -83,6 +83,14 @@ enum {
 	LAST_PROP
 };
 
+static const char *valid_values_mode[] = {
+	NM_SETTING_WIRELESS_MODE_INFRA,
+	NM_SETTING_WIRELESS_MODE_ADHOC,
+	NM_SETTING_WIRELESS_MODE_AP,
+	NULL
+};
+static const char *valid_values_band[] = { "a", "bg", NULL };
+
 static gboolean
 match_cipher (const char *cipher,
               const char *expected,
@@ -716,8 +724,6 @@ static gboolean
 verify (NMSetting *setting, NMConnection *connection, GError **error)
 {
 	NMSettingWirelessPrivate *priv = NM_SETTING_WIRELESS_GET_PRIVATE (setting);
-	const char *valid_modes[] = { NM_SETTING_WIRELESS_MODE_INFRA, NM_SETTING_WIRELESS_MODE_ADHOC, NM_SETTING_WIRELESS_MODE_AP, NULL };
-	const char *valid_bands[] = { "a", "bg", NULL };
 	GSList *iter;
 	int i;
 	gsize length;
@@ -741,25 +747,13 @@ verify (NMSetting *setting, NMConnection *connection, GError **error)
 		return FALSE;
 	}
 
-	if (priv->mode && !_nm_utils_string_in_list (priv->mode, valid_modes)) {
-		g_set_error (error,
-		             NM_CONNECTION_ERROR,
-		             NM_CONNECTION_ERROR_INVALID_PROPERTY,
-		             _("'%s' is not a valid Wi-Fi mode"),
-		             priv->mode);
-		g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRELESS_SETTING_NAME, NM_SETTING_WIRELESS_MODE);
+	if (!_nm_setting_validate_string_property (setting, NM_SETTING_WIRELESS_MODE, priv->mode,
+	                                           _("is not a valid Wi-Fi mode"), error))
 		return FALSE;
-	}
 
-	if (priv->band && !_nm_utils_string_in_list (priv->band, valid_bands)) {
-		g_set_error (error,
-		             NM_CONNECTION_ERROR,
-		             NM_CONNECTION_ERROR_INVALID_PROPERTY,
-		             _("'%s' is not a valid band"),
-		             priv->band);
-		g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRELESS_SETTING_NAME, NM_SETTING_WIRELESS_BAND);
+	if (!_nm_setting_validate_string_property (setting, NM_SETTING_WIRELESS_BAND, priv->band,
+	                                           _("is not a valid Wi-Fi band"), error))
 		return FALSE;
-	}
 
 	if (priv->channel && !priv->band) {
 		g_set_error (error,
@@ -1027,6 +1021,7 @@ nm_setting_wireless_class_init (NMSettingWirelessClass *setting_class)
 {
 	GObjectClass *object_class = G_OBJECT_CLASS (setting_class);
 	NMSettingClass *parent_class = NM_SETTING_CLASS (setting_class);
+	GParamSpec *pspec;
 
 	g_type_class_add_private (setting_class, sizeof (NMSettingWirelessPrivate));
 
@@ -1075,12 +1070,12 @@ nm_setting_wireless_class_init (NMSettingWirelessClass *setting_class)
 	 * description: Wi-Fi network mode.
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_MODE,
-		 g_param_spec_string (NM_SETTING_WIRELESS_MODE, "", "",
-		                      NULL,
-		                      G_PARAM_READWRITE |
-		                      G_PARAM_STATIC_STRINGS));
+	pspec = g_param_spec_string (NM_SETTING_WIRELESS_MODE, "", "",
+	                             NULL,
+	                             G_PARAM_READWRITE |
+	                             G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_MODE, pspec);
+	_nm_setting_property_set_valid_values (pspec, valid_values_mode);
 
 	/**
 	 * NMSettingWireless:band:
@@ -1101,12 +1096,12 @@ nm_setting_wireless_class_init (NMSettingWirelessClass *setting_class)
 	 * example: BAND=bg
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_BAND,
-		 g_param_spec_string (NM_SETTING_WIRELESS_BAND, "", "",
-		                      NULL,
-		                      G_PARAM_READWRITE |
-		                      G_PARAM_STATIC_STRINGS));
+	pspec = g_param_spec_string (NM_SETTING_WIRELESS_BAND, "", "",
+	                             NULL,
+	                             G_PARAM_READWRITE |
+	                             G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_BAND, pspec);
+	_nm_setting_property_set_valid_values (pspec, valid_values_band);
 
 	/**
 	 * NMSettingWireless:channel:

@@ -71,6 +71,15 @@ enum {
 	LAST_PROP
 };
 
+static const char *valid_values_method[] = {
+	NM_SETTING_IP4_CONFIG_METHOD_AUTO,
+	NM_SETTING_IP4_CONFIG_METHOD_LINK_LOCAL,
+	NM_SETTING_IP4_CONFIG_METHOD_MANUAL,
+	NM_SETTING_IP4_CONFIG_METHOD_SHARED,
+	NM_SETTING_IP4_CONFIG_METHOD_DISABLED,
+	NULL
+};
+
 /**
  * nm_setting_ip4_config_new:
  *
@@ -512,6 +521,7 @@ nm_setting_ip4_config_class_init (NMSettingIP4ConfigClass *ip4_class)
 {
 	NMSettingClass *setting_class = NM_SETTING_CLASS (ip4_class);
 	GObjectClass *object_class = G_OBJECT_CLASS (ip4_class);
+	GParamSpec *pspec;
 
 	g_type_class_add_private (setting_class, sizeof (NMSettingIP4ConfigPrivate));
 
@@ -532,6 +542,8 @@ nm_setting_ip4_config_class_init (NMSettingIP4ConfigClass *ip4_class)
 	 * description: Method used for IPv4 protocol configuration.
 	 * ---end---
 	 */
+	pspec = g_object_class_find_property (object_class, NM_SETTING_IP_CONFIG_METHOD);
+	_nm_setting_property_set_valid_values (pspec, valid_values_method);
 
 	/* ---keyfile---
 	 * property: dns

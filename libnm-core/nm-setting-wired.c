@@ -80,7 +80,9 @@ enum {
 	LAST_PROP
 };
 
-static const char *valid_s390_opts[] = {
+static const char *valid_values_port[] = { "tp", "aui", "bnc", "mii", NULL };
+static const char *valid_values_duplex[] = { "half", "full", NULL };
+static const char *valid_values_s390_options[] = {
 	"portno", "layer2", "portname", "protocol", "priority_queueing",
 	"buffer_count", "isolation", "total", "inter", "inter_jumbo", "route4",
 	"route6", "fake_broadcast", "broadcast_mode", "canonical_macaddr",
@@ -89,6 +91,7 @@ static const char *valid_s390_opts[] = {
 	"rxip_add4", "rxip_add6", "lancmd_timeout", "ctcprot",
 	NULL
 };
+static const char *valid_values_s390_nettype[] = { "qeth", "lcs", "ctc", NULL };
 
 /**
  * nm_setting_wired_new:
@@ -504,7 +507,7 @@ nm_setting_wired_add_s390_option (NMSettingWired *setting,
 	g_return_val_if_fail (NM_IS_SETTING_WIRED (setting), FALSE);
 	g_return_val_if_fail (key != NULL, FALSE);
 	g_return_val_if_fail (strlen (key), FALSE);
-	g_return_val_if_fail (_nm_utils_string_in_list (key, valid_s390_opts), FALSE);
+	g_return_val_if_fail (_nm_utils_string_in_list (key, valid_values_s390_options), FALSE);
 	g_return_val_if_fail (value != NULL, FALSE);
 
 	value_len = strlen (value);
@@ -555,7 +558,7 @@ nm_setting_wired_remove_s390_option (NMSettingWired *setting,
 const char **
 nm_setting_wired_get_valid_s390_options (NMSettingWired *setting)
 {
-	return valid_s390_opts;
+	return valid_values_s390_options;
 }
 
 /**
@@ -605,32 +608,16 @@ static gboolean
 verify (NMSetting *setting, NMConnection *connection, GError **error)
 {
 	NMSettingWiredPrivate *priv = NM_SETTING_WIRED_GET_PRIVATE (setting);
-	const char *valid_ports[] = { "tp", "aui", "bnc", "mii", NULL };
-	const char *valid_duplex[] = { "half", "full", NULL };
-	const char *valid_nettype[] = { "qeth", "lcs", "ctc", NULL };
 	GHashTableIter iter;
 	const char *key, *value;
 	int i;
 
-	if (priv->port && !_nm_utils_string_in_list (priv->port, valid_ports)) {
-		g_set_error (error,
-		             NM_CONNECTION_ERROR,
-		             NM_CONNECTION_ERROR_INVALID_PROPERTY,
-		             _("'%s' is not a valid Ethernet port value"),
-		             priv->port);
-		g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRED_SETTING_NAME, NM_SETTING_WIRED_PORT);
+	if (!_nm_setting_validate_string_property (setting, NM_SETTING_WIRED_PORT, priv->port,
+	                                           _("is not a valid Ethernet port value"), error))
 		return FALSE;
-	}
-
-	if (priv->duplex && !_nm_utils_string_in_list (priv->duplex, valid_duplex)) {
-		g_set_error (error,
-		             NM_CONNECTION_ERROR,
-		             NM_CONNECTION_ERROR_INVALID_PROPERTY,
-		             _("'%s' is not a valid duplex value"),
-		             priv->duplex);
-		g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRED_SETTING_NAME, NM_SETTING_WIRED_DUPLEX);
+	if (!_nm_setting_validate_string_property (setting, NM_SETTING_WIRED_DUPLEX, priv->duplex,
+	                                           _("is not a valid Ethernet duplex value"), error))
 		return FALSE;
-	}
 
 	if (priv->device_mac_address && !nm_utils_hwaddr_valid (priv->device_mac_address, ETH_ALEN)) {
 		g_set_error_literal (error,
@@ -668,18 +655,13 @@ verify (NMSetting *setting, NMConnection *connection, GError **error)
 		}
 	}
 
-	if (priv->s390_nettype && !_nm_utils_string_in_list (priv->s390_nettype, valid_nettype)) {
-		g_set_error_literal (error,
-		                     NM_CONNECTION_ERROR,
-		                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
-		                     _("property is invalid"));
-		g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRED_SETTING_NAME, NM_SETTING_WIRED_S390_NETTYPE);
+	if (!_nm_setting_validate_string_property (setting, NM_SETTING_WIRED_S390_NETTYPE,
+	                                           priv->s390_nettype, NULL, error))
 		return FALSE;
-	}
 
 	g_hash_table_iter_init (&iter, priv->s390_options);
 	while (g_hash_table_iter_next (&iter, (gpointer) &key, (gpointer) &value)) {
-		if (   !_nm_utils_string_in_list (key, valid_s390_opts)
+		if (   !_nm_utils_string_in_list (key, valid_values_s390_options)
 		    || !strlen (value)
 		    || (strlen (value) > 200)) {
 			g_set_error (error,
@@ -904,6 +886,7 @@ nm_setting_wired_class_init (NMSettingWiredClass *setting_class)
 {
 	GObjectClass *object_class = G_OBJECT_CLASS (setting_class);
 	NMSettingClass *parent_class = NM_SETTING_CLASS (setting_class);
+	GParamSpec *pspec;
 
 	g_type_class_add_private (setting_class, sizeof (NMSettingWiredPrivate));
 
@@ -928,12 +911,12 @@ nm_setting_wired_class_init (NMSettingWiredClass *setting_class)
 	 * description: The property is not saved by the plugin.
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_PORT,
-		 g_param_spec_string (NM_SETTING_WIRED_PORT, "", "",
-		                      NULL,
-		                      G_PARAM_READWRITE |
-		                      G_PARAM_STATIC_STRINGS));
+	pspec = g_param_spec_string (NM_SETTING_WIRED_PORT, "", "",
+	                             NULL,
+	                             G_PARAM_READWRITE |
+	                             G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_PORT, pspec);
+	_nm_setting_property_set_valid_values (pspec, valid_values_port);
 
 	/**
 	 * NMSettingWired:speed:
@@ -967,12 +950,12 @@ nm_setting_wired_class_init (NMSettingWiredClass *setting_class)
 	 * description: The property is not saved by the plugin.
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_DUPLEX,
-		 g_param_spec_string (NM_SETTING_WIRED_DUPLEX, "", "",
-		                      NULL,
-		                      G_PARAM_READWRITE |
-		                      G_PARAM_STATIC_STRINGS));
+	pspec = g_param_spec_string (NM_SETTING_WIRED_DUPLEX, "", "",
+	                             NULL,
+	                             G_PARAM_READWRITE |
+	                             G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_DUPLEX, pspec);
+	_nm_setting_property_set_valid_values (pspec, valid_values_duplex);
 
 	/**
 	 * NMSettingWired:auto-negotiate:
@@ -1151,13 +1134,13 @@ nm_setting_wired_class_init (NMSettingWiredClass *setting_class)
 	 * example: NETTYPE=qeth
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_S390_NETTYPE,
-		 g_param_spec_string (NM_SETTING_WIRED_S390_NETTYPE, "", "",
-		                      NULL,
-		                      G_PARAM_READWRITE |
-		                      NM_SETTING_PARAM_INFERRABLE |
-		                      G_PARAM_STATIC_STRINGS));
+	pspec = g_param_spec_string (NM_SETTING_WIRED_S390_NETTYPE, "", "",
+	                      NULL,
+	                      G_PARAM_READWRITE |
+	                      NM_SETTING_PARAM_INFERRABLE |
+	                      G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_S390_NETTYPE, pspec);
+	_nm_setting_property_set_valid_values (pspec, valid_values_s390_nettype);
 
 	/**
 	 * NMSettingWired:s390-options:
@@ -1176,13 +1159,13 @@ nm_setting_wired_class_init (NMSettingWiredClass *setting_class)
 	 *   "portname" and "ctcprot" that have their own variables.
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_S390_OPTIONS,
-		 g_param_spec_boxed (NM_SETTING_WIRED_S390_OPTIONS, "", "",
-		                     G_TYPE_HASH_TABLE,
-		                     G_PARAM_READWRITE |
-		                     NM_SETTING_PARAM_INFERRABLE |
-		                     G_PARAM_STATIC_STRINGS));
+	pspec = g_param_spec_boxed (NM_SETTING_WIRED_S390_OPTIONS, "", "",
+	                            G_TYPE_HASH_TABLE,
+	                            G_PARAM_READWRITE |
+	                            NM_SETTING_PARAM_INFERRABLE |
+	                            G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_S390_OPTIONS, pspec);
+	_nm_setting_property_set_valid_values (pspec, valid_values_s390_options);
 	_nm_setting_class_transform_property (parent_class, NM_SETTING_WIRED_S390_OPTIONS,
 	                                      G_VARIANT_TYPE ("a{ss}"),
 	                                      _nm_utils_strdict_to_dbus,

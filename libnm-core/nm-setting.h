@@ -302,6 +302,26 @@ gboolean    nm_setting_set_secret_flags (NMSetting *setting,
 const GVariantType *nm_setting_get_dbus_property_type (NMSetting *setting,
                                                        const char *property_name);
 
+/* Defines and accessor functions for property metadata */
+#define NM_SETTING_PROPERTY_METADATA_VALID_VALUES "metadata-valid-values"
+#define NM_SETTING_PROPERTY_METADATA_FILENAME     "metadata-filename"
+#define NM_SETTING_PROPERTY_METADATA_MULTI        "metadata-multi"
+NM_AVAILABLE_IN_1_2
+GType         nm_setting_property_get_gtype        (NMSetting *setting,
+                                                    const char *property_name);
+NM_AVAILABLE_IN_1_2
+const char  **nm_setting_property_get_valid_values (NMSetting *setting,
+                                                    const char *property_name);
+NM_AVAILABLE_IN_1_2
+gboolean      nm_setting_property_is_filename      (NMSetting *setting,
+                                                    const char *property_name);
+NM_AVAILABLE_IN_1_2
+gboolean      nm_setting_property_is_multi_value   (NMSetting *setting,
+                                                    const char *property_name);
+NM_AVAILABLE_IN_1_2
+gboolean      nm_setting_property_is_hash          (NMSetting *setting,
+                                                    const char *property_name);
+
 G_END_DECLS
 
 #endif /* __NM_SETTING_H__ */

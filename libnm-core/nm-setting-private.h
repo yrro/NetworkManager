@@ -28,6 +28,11 @@
 
 #include "nm-core-internal.h"
 
+/* Declare quarks for property metadata */
+extern GQuark _property_metadata_valid_values_quark;
+extern GQuark _property_metadata_filename_quark;
+extern GQuark _property_metadata_multi_quark;
+
 /**
  * NMSettingVerifyResult:
  * @NM_SETTING_VERIFY_SUCCESS: the setting verifies successfully
@@ -167,6 +172,22 @@ gboolean _nm_setting_use_legacy_property (NMSetting *setting,
                                           GVariant *connection_dict,
                                           const char *legacy_property,
                                           const char *new_property);
+
+gboolean _nm_setting_validate_string_property (NMSetting *setting,
+                                               const char *property_name,
+                                               const char *value,
+                                               const char *err_msg,
+                                               GError **error);
+
+gboolean _nm_setting_validate_slist_property (NMSetting *setting,
+                                              const char *property_name,
+                                              GSList *list,
+                                              GError **error);
+
+void _nm_setting_property_set_valid_values (GParamSpec *pspec,
+                                            const char **valid_values);
+void _nm_setting_property_set_is_filename (GParamSpec *pspec);
+void _nm_setting_property_set_is_multi_value (GParamSpec *pspec);
 
 GPtrArray  *_nm_setting_need_secrets (NMSetting *setting);
 

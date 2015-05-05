@@ -819,6 +819,7 @@ nm_setting_vpn_class_init (NMSettingVpnClass *setting_class)
 {
 	GObjectClass *object_class = G_OBJECT_CLASS (setting_class);
 	NMSettingClass *parent_class = NM_SETTING_CLASS (setting_class);
+	GParamSpec *pspec;
 
 	g_type_class_add_private (setting_class, sizeof (NMSettingVpnPrivate));
 
@@ -897,12 +898,11 @@ nm_setting_vpn_class_init (NMSettingVpnClass *setting_class)
 	 * example: remote=ovpn.corp.com cipher=AES-256-CBC username=joe
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_DATA,
-		 g_param_spec_boxed (NM_SETTING_VPN_DATA, "", "",
-		                     G_TYPE_HASH_TABLE,
-		                     G_PARAM_READWRITE |
-		                     G_PARAM_STATIC_STRINGS));
+	pspec = g_param_spec_boxed (NM_SETTING_VPN_DATA, "", "",
+	                            G_TYPE_HASH_TABLE,
+	                            G_PARAM_READWRITE |
+	                            G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_DATA, pspec);
 	_nm_setting_class_transform_property (parent_class, NM_SETTING_VPN_DATA,
 	                                      G_VARIANT_TYPE ("a{ss}"),
 	                                      _nm_utils_strdict_to_dbus,
@@ -924,13 +924,12 @@ nm_setting_vpn_class_init (NMSettingVpnClass *setting_class)
 	 * example: password=Popocatepetl
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_SECRETS,
-		 g_param_spec_boxed (NM_SETTING_VPN_SECRETS, "", "",
-		                     G_TYPE_HASH_TABLE,
-		                     G_PARAM_READWRITE |
-		                     NM_SETTING_PARAM_SECRET |
-		                     G_PARAM_STATIC_STRINGS));
+	pspec = g_param_spec_boxed (NM_SETTING_VPN_SECRETS, "", "",
+	                            G_TYPE_HASH_TABLE,
+	                            G_PARAM_READWRITE |
+	                            NM_SETTING_PARAM_SECRET |
+	                            G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_SECRETS, pspec);
 	_nm_setting_class_transform_property (parent_class, NM_SETTING_VPN_SECRETS,
 	                                      G_VARIANT_TYPE ("a{ss}"),
 	                                      _nm_utils_strdict_to_dbus,

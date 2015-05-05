@@ -99,6 +99,21 @@ static const BondDefault defaults[] = {
 	  { "slow", "fast", NULL } },
 };
 
+static const char **
+get_valid_options (void)
+{
+	static const char *array[G_N_ELEMENTS (defaults) + 1] = { NULL };
+	int i;
+
+	/* initialize the array once */
+	if (G_UNLIKELY (array[0] == NULL)) {
+		for (i = 0; i < G_N_ELEMENTS (defaults); i++)
+			array[i] = defaults[i].opt;
+		array[i] = NULL;
+	}
+	return array;
+}
+
 /**
  * nm_setting_bond_new:
  *
@@ -395,18 +410,9 @@ nm_setting_bond_remove_option (NMSettingBond *setting,
  * Returns: (transfer none): a %NULL-terminated array of strings of valid bond options.
  **/
 const char **
-nm_setting_bond_get_valid_options  (NMSettingBond *setting)
+nm_setting_bond_get_valid_options (NMSettingBond *setting)
 {
-	static const char *array[G_N_ELEMENTS (defaults) + 1] = { NULL };
-	int i;
-
-	/* initialize the array once */
-	if (G_UNLIKELY (array[0] == NULL)) {
-		for (i = 0; i < G_N_ELEMENTS (defaults); i++)
-			array[i] = defaults[i].opt;
-		array[i] = NULL;
-	}
-	return array;
+	return get_valid_options ();
 }
 
 /**
@@ -717,6 +723,7 @@ nm_setting_bond_class_init (NMSettingBondClass *setting_class)
 {
 	GObjectClass *object_class = G_OBJECT_CLASS (setting_class);
 	NMSettingClass *parent_class = NM_SETTING_CLASS (setting_class);
+	GParamSpec *pspec;
 
 	g_type_class_add_private (setting_class, sizeof (NMSettingBondPrivate));
 
@@ -743,17 +750,17 @@ nm_setting_bond_class_init (NMSettingBondClass *setting_class)
 	 * example: BONDING_OPTS="miimon=100 mode=broadcast"
 	 * ---end---
 	 */
-	 g_object_class_install_property
-		 (object_class, PROP_OPTIONS,
-		 g_param_spec_boxed (NM_SETTING_BOND_OPTIONS, "", "",
-		                     G_TYPE_HASH_TABLE,
-		                     G_PARAM_READWRITE |
-		                     NM_SETTING_PARAM_INFERRABLE |
-		                     G_PARAM_STATIC_STRINGS));
-	 _nm_setting_class_transform_property (parent_class, NM_SETTING_BOND_OPTIONS,
-	                                       G_VARIANT_TYPE ("a{ss}"),
-	                                       _nm_utils_strdict_to_dbus,
-	                                       _nm_utils_strdict_from_dbus);
+	pspec = g_param_spec_boxed (NM_SETTING_BOND_OPTIONS, "", "",
+	                            G_TYPE_HASH_TABLE,
+	                            G_PARAM_READWRITE |
+	                            NM_SETTING_PARAM_INFERRABLE |
+	                            G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_OPTIONS, pspec);
+	_nm_setting_property_set_valid_values (pspec, get_valid_options ());
+	_nm_setting_class_transform_property (parent_class, NM_SETTING_BOND_OPTIONS,
+	                                      G_VARIANT_TYPE ("a{ss}"),
+	                                      _nm_utils_strdict_to_dbus,
+	                                      _nm_utils_strdict_from_dbus);
 
 	 /* ---dbus---
 	  * property: interface-name

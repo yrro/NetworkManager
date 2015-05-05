@@ -103,6 +103,13 @@ enum {
 	LAST_PROP
 };
 
+static const char *valid_values_slave_type[] = {
+	NM_SETTING_BOND_SETTING_NAME,
+	NM_SETTING_TEAM_SETTING_NAME,
+	NM_SETTING_BRIDGE_SETTING_NAME,
+	NULL
+};
+
 /***********************************************************************/
 
 #define PERM_USER_PREFIX  "user:"
@@ -1309,6 +1316,7 @@ nm_setting_connection_class_init (NMSettingConnectionClass *setting_class)
 {
 	GObjectClass *object_class = G_OBJECT_CLASS (setting_class);
 	NMSettingClass *parent_class = NM_SETTING_CLASS (setting_class);
+	GParamSpec *pspec;
 
 	g_type_class_add_private (setting_class, sizeof (NMSettingConnectionPrivate));
 
@@ -1617,14 +1625,14 @@ nm_setting_connection_class_init (NMSettingConnectionClass *setting_class)
 	 *   TEAM_MASTER and DEVICETYPE for teaming, BRIDGE for bridging.
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_SLAVE_TYPE,
-		 g_param_spec_string (NM_SETTING_CONNECTION_SLAVE_TYPE, "", "",
-		                      NULL,
-		                      G_PARAM_READWRITE |
-		                      NM_SETTING_PARAM_FUZZY_IGNORE |
-		                      NM_SETTING_PARAM_INFERRABLE |
-		                      G_PARAM_STATIC_STRINGS));
+	pspec = g_param_spec_string (NM_SETTING_CONNECTION_SLAVE_TYPE, "", "",
+	                             NULL,
+	                             G_PARAM_READWRITE |
+	                             NM_SETTING_PARAM_FUZZY_IGNORE |
+	                             NM_SETTING_PARAM_INFERRABLE |
+	                             G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_SLAVE_TYPE, pspec);
+	_nm_setting_property_set_valid_values (pspec, valid_values_slave_type);
 
 	/**
 	 * NMSettingConnection:autoconnect-slaves:
