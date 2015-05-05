@@ -2608,7 +2608,7 @@ check_and_set_string (NMSetting *setting,
 		if (value) { \
 			gboolean ret; \
 			char *value_stripped = g_strstrip (g_strdup (value)); \
-			ret = rem_func_val (s_macro (setting), value_stripped, error); \
+			ret = rem_func_val (s_macro (setting), prop, value_stripped, error); \
 			g_free (value_stripped); \
 			return ret; \
 		} \
@@ -2637,13 +2637,6 @@ check_and_set_string (NMSetting *setting,
 		} else \
 			g_set_error_literal (error, 1, 0, _("missing option")); \
 		return success; \
-	}
-
-#define DEFINE_ALLOWED_VAL_FUNC(def_func, valid_values) \
-	static const char ** \
-	def_func (NMSetting *setting, const char *prop) \
-	{ \
-		return valid_values; \
 	}
 
 /* --- generic property setter functions --- */
@@ -3006,6 +2999,7 @@ nmc_property_connection_set_permissions (NMSetting *setting, const char *prop, c
 
 static gboolean
 _validate_and_remove_connection_permission (NMSettingConnection *setting,
+                                            const char *prop,
                                             const char *perm,
                                             GError **error)
 {
@@ -3053,21 +3047,12 @@ nmc_property_con_set_master (NMSetting *setting, const char *prop, const char *v
 }
 
 /* 'slave-type' */
-static const char *con_valid_slave_types[] = {
-	NM_SETTING_BOND_SETTING_NAME,
-	NM_SETTING_BRIDGE_SETTING_NAME,
-	NM_SETTING_TEAM_SETTING_NAME,
-	NULL
-};
-
 static gboolean
 nmc_property_con_set_slave_type (NMSetting *setting, const char *prop, const char *val, GError **error)
 {
-	return check_and_set_string (setting, prop, val, con_valid_slave_types, error);
+	const char **valid_values = nm_setting_property_get_valid_values (setting, prop);
+	return check_and_set_string (setting, prop, val, valid_values, error);
 }
-
-
-DEFINE_ALLOWED_VAL_FUNC (nmc_property_con_allowed_slave_type, con_valid_slave_types)
 
 /* 'secondaries' */
 static gboolean
@@ -3128,6 +3113,7 @@ nmc_property_connection_set_secondaries (NMSetting *setting, const char *prop, c
 
 static gboolean
 _validate_and_remove_connection_secondary (NMSettingConnection *setting,
+                                           const char *prop,
                                            const char *secondary_uuid,
                                            GError **error)
 {
@@ -3366,6 +3352,7 @@ nmc_property_802_1X_set_eap (NMSetting *setting, const char *prop, const char *v
 
 static gboolean
 _validate_and_remove_eap_method (NMSetting8021x *setting,
+                                 const char *prop,
                                  const char *eap,
                                  GError **error)
 {
@@ -3381,8 +3368,6 @@ DEFINE_REMOVER_INDEX_OR_VALUE (nmc_property_802_1X_remove_eap,
                                nm_setting_802_1x_get_num_eap_methods,
                                nm_setting_802_1x_remove_eap_method,
                                _validate_and_remove_eap_method)
-
-DEFINE_ALLOWED_VAL_FUNC (nmc_property_802_1X_allowed_eap, valid_eap)
 
 /* 'ca-cert' */
 DEFINE_SETTER_CERT (nmc_property_802_1X_set_ca_cert, nm_setting_802_1x_set_ca_cert)
@@ -3401,6 +3386,7 @@ DEFINE_SETTER_STR_LIST (nmc_property_802_1X_set_altsubject_matches, nm_setting_8
 
 static gboolean
 _validate_and_remove_altsubject_match (NMSetting8021x *setting,
+                                       const char *prop,
                                        const char *altsubject_match,
                                        GError **error)
 {
@@ -3449,6 +3435,7 @@ DEFINE_SETTER_STR_LIST (nmc_property_802_1X_set_phase2_altsubject_matches, nm_se
 
 static gboolean
 _validate_and_remove_phase2_altsubject_match (NMSetting8021x *setting,
+                                              const char *prop,
                                               const char *phase2_altsubject_match,
                                               GError **error)
 {
@@ -3500,59 +3487,44 @@ nmc_property_802_1X_describe_private_key (NMSetting *setting, const char *prop)
 }
 
 /* 'phase1-peapver' */
-static const char *_802_1X_valid_phase1_peapvers[] = { "0", "1", NULL };
-
 static gboolean
 nmc_property_802_1X_set_phase1_peapver (NMSetting *setting, const char *prop, const char *val, GError **error)
 {
-	return check_and_set_string (setting, prop, val, _802_1X_valid_phase1_peapvers, error);
+	const char **valid_values = nm_setting_property_get_valid_values (setting, prop);
+	return check_and_set_string (setting, prop, val, valid_values, error);
 }
 
-DEFINE_ALLOWED_VAL_FUNC (nmc_property_802_1X_allowed_phase1_peapver, _802_1X_valid_phase1_peapvers)
-
 /* 'phase1-peaplabel' */
-static const char *_802_1X_valid_phase1_peaplabels[] = { "0", "1", NULL };
-
 static gboolean
 nmc_property_802_1X_set_phase1_peaplabel (NMSetting *setting, const char *prop, const char *val, GError **error)
 {
-	return check_and_set_string (setting, prop, val, _802_1X_valid_phase1_peaplabels, error);
+	const char **valid_values = nm_setting_property_get_valid_values (setting, prop);
+	return check_and_set_string (setting, prop, val, valid_values, error);
 }
 
-DEFINE_ALLOWED_VAL_FUNC (nmc_property_802_1X_allowed_phase1_peaplabel, _802_1X_valid_phase1_peaplabels)
-
 /* 'phase1-fast-provisioning' */
-static const char *_802_1X_valid_phase1_fast_provisionings[] = { "0", "1", "2", "3", NULL };
-
 static gboolean
 nmc_property_802_1X_set_phase1_fast_provisioning (NMSetting *setting, const char *prop, const char *val, GError **error)
 {
-	return check_and_set_string (setting, prop, val, _802_1X_valid_phase1_fast_provisionings, error);
+	const char **valid_values = nm_setting_property_get_valid_values (setting, prop);
+	return check_and_set_string (setting, prop, val, valid_values, error);
 }
 
-DEFINE_ALLOWED_VAL_FUNC (nmc_property_802_1X_allowed_phase1_fast_provisioning, _802_1X_valid_phase1_fast_provisionings)
-
 /* 'phase2-auth' */
-static const char *_802_1X_valid_phase2_auths[] =
-	{ "pap", "chap", "mschap", "mschapv2", "gtc", "otp", "md5", "tls", NULL };
-
 static gboolean
 nmc_property_802_1X_set_phase2_auth (NMSetting *setting, const char *prop, const char *val, GError **error)
 {
-	return check_and_set_string (setting, prop, val, _802_1X_valid_phase2_auths, error);
+	const char **valid_values = nm_setting_property_get_valid_values (setting, prop);
+	return check_and_set_string (setting, prop, val, valid_values, error);
 }
 
-DEFINE_ALLOWED_VAL_FUNC (nmc_property_802_1X_allowed_phase2_auth, _802_1X_valid_phase2_auths)
-
 /* 'phase2-autheap' */
-static const char *_802_1X_valid_phase2_autheaps[] = { "md5", "mschapv2", "otp", "gtc", "tls", NULL };
 static gboolean
 nmc_property_802_1X_set_phase2_autheap (NMSetting *setting, const char *prop, const char *val, GError **error)
 {
-	return check_and_set_string (setting, prop, val, _802_1X_valid_phase2_autheaps, error);
+	const char **valid_values = nm_setting_property_get_valid_values (setting, prop);
+	return check_and_set_string (setting, prop, val, valid_values, error);
 }
-
-DEFINE_ALLOWED_VAL_FUNC (nmc_property_802_1X_allowed_phase2_autheap, _802_1X_valid_phase2_autheaps)
 
 /* 'password-raw' */
 static gboolean
@@ -3575,35 +3547,20 @@ nmc_property_802_1X_describe_password_raw (NMSetting *setting, const char *prop)
 
 /* --- NM_SETTING_ADSL_SETTING_NAME property setter functions --- */
 /* 'protocol' */
-static const char *adsl_valid_protocols[] = {
-	NM_SETTING_ADSL_PROTOCOL_PPPOA,
-	NM_SETTING_ADSL_PROTOCOL_PPPOE,
-	NM_SETTING_ADSL_PROTOCOL_IPOATM,
-	NULL
-};
-
 static gboolean
 nmc_property_adsl_set_protocol (NMSetting *setting, const char *prop, const char *val, GError **error)
 {
-	return check_and_set_string (setting, prop, val, adsl_valid_protocols, error);
+	const char **valid_values = nm_setting_property_get_valid_values (setting, prop);
+	return check_and_set_string (setting, prop, val, valid_values, error);
 }
 
-DEFINE_ALLOWED_VAL_FUNC (nmc_property_adsl_allowed_protocol, adsl_valid_protocols)
-
 /* 'encapsulation' */
-static const char *adsl_valid_encapsulations[] = {
-	NM_SETTING_ADSL_ENCAPSULATION_VCMUX,
-	NM_SETTING_ADSL_ENCAPSULATION_LLC,
-	NULL
-};
-
 static gboolean
 nmc_property_adsl_set_encapsulation (NMSetting *setting, const char *prop, const char *val, GError **error)
 {
-	return check_and_set_string (setting, prop, val, adsl_valid_encapsulations, error);
+	const char **valid_values = nm_setting_property_get_valid_values (setting, prop);
+	return check_and_set_string (setting, prop, val, valid_values, error);
 }
-
-DEFINE_ALLOWED_VAL_FUNC (nmc_property_adsl_allowed_encapsulation, adsl_valid_encapsulations)
 
 /* --- NM_SETTING_BLUETOOTH_SETTING_NAME property setter functions --- */
 /* 'type' */
@@ -3684,12 +3641,6 @@ nmc_property_bond_describe_options (NMSetting *setting, const char *prop)
 	return desc;
 }
 
-static const char **
-nmc_property_bond_allowed_options (NMSetting *setting, const char *prop)
-{
-	return nm_setting_bond_get_valid_options (NM_SETTING_BOND (setting));
-}
-
 /* --- NM_SETTING_INFINIBAND_SETTING_NAME property setter functions --- */
 /* 'mac-address' */
 static gboolean
@@ -3707,15 +3658,12 @@ nmc_property_ib_set_mac (NMSetting *setting, const char *prop, const char *val, 
 }
 
 /* 'transport-mode' */
-static const char *ib_valid_transport_modes[] = { "datagram", "connected", NULL };
-
 static gboolean
 nmc_property_ib_set_transport_mode (NMSetting *setting, const char *prop, const char *val, GError **error)
 {
-	return check_and_set_string (setting, prop, val, ib_valid_transport_modes, error);
+	const char **valid_values = nm_setting_property_get_valid_values (setting, prop);
+	return check_and_set_string (setting, prop, val, valid_values, error);
 }
-
-DEFINE_ALLOWED_VAL_FUNC (nmc_property_ib_allowed_transport_mode, ib_valid_transport_modes)
 
 /* 'p-key' */
 static gboolean
@@ -3780,26 +3728,17 @@ finish:
 
 /* --- NM_SETTING_IP4_CONFIG_SETTING_NAME property setter functions --- */
 /* 'method' */
-static const char *ipv4_valid_methods[] = {
-	NM_SETTING_IP4_CONFIG_METHOD_AUTO,
-	NM_SETTING_IP4_CONFIG_METHOD_LINK_LOCAL,
-	NM_SETTING_IP4_CONFIG_METHOD_MANUAL,
-	NM_SETTING_IP4_CONFIG_METHOD_SHARED,
-	NM_SETTING_IP4_CONFIG_METHOD_DISABLED,
-	NULL
-};
-
 static gboolean
 nmc_property_ipv4_set_method (NMSetting *setting, const char *prop, const char *val, GError **error)
 {
+	const char **valid_values = nm_setting_property_get_valid_values (setting, prop);
+
 	/* Silently accept "static" and convert to "manual" */
 	if (val && strlen (val) > 1 && matches (val, "static") == 0)
 		val = NM_SETTING_IP4_CONFIG_METHOD_MANUAL;
 
-	return check_and_set_string (setting, prop, val, ipv4_valid_methods, error);
+	return check_and_set_string (setting, prop, val, valid_values, error);
 }
-
-DEFINE_ALLOWED_VAL_FUNC (nmc_property_ipv4_allowed_method, ipv4_valid_methods)
 
 /* 'dns' */
 static gboolean
@@ -3826,6 +3765,7 @@ nmc_property_ipv4_set_dns (NMSetting *setting, const char *prop, const char *val
 
 static gboolean
 _validate_and_remove_ipv4_dns (NMSettingIPConfig *setting,
+                               const char *prop,
                                const char *dns,
                                GError **error)
 {
@@ -3879,6 +3819,7 @@ nmc_property_ipv4_set_dns_search (NMSetting *setting, const char *prop, const ch
 
 static gboolean
 _validate_and_remove_ipv4_dns_search (NMSettingIPConfig *setting,
+                                      const char *prop,
                                       const char *dns_search,
                                       GError **error)
 {
@@ -3917,6 +3858,7 @@ nmc_property_ipv4_set_dns_options (NMSetting *setting, const char *prop, const c
 
 static gboolean
 _validate_and_remove_ipv4_dns_option (NMSettingIPConfig *setting,
+                                      const char *prop,
                                       const char *dns_option,
                                       GError **error)
 {
@@ -3966,6 +3908,7 @@ nmc_property_ipv4_set_addresses (NMSetting *setting, const char *prop, const cha
 
 static gboolean
 _validate_and_remove_ipv4_address (NMSettingIPConfig *setting,
+                                   const char *prop,
                                    const char *address,
                                    GError **error)
 {
@@ -4051,6 +3994,7 @@ nmc_property_ipv4_set_routes (NMSetting *setting, const char *prop, const char *
 
 static gboolean
 _validate_and_remove_ipv4_route (NMSettingIPConfig *setting,
+                                 const char *prop,
                                  const char *route,
                                  GError **error)
 {
@@ -4087,27 +4031,17 @@ nmc_property_ipv4_describe_routes (NMSetting *setting, const char *prop)
 
 /* --- NM_SETTING_IP6_CONFIG_SETTING_NAME property setter functions --- */
 /* 'method' */
-static const char *ipv6_valid_methods[] = {
-	NM_SETTING_IP6_CONFIG_METHOD_IGNORE,
-	NM_SETTING_IP6_CONFIG_METHOD_AUTO,
-	NM_SETTING_IP6_CONFIG_METHOD_DHCP,
-	NM_SETTING_IP6_CONFIG_METHOD_LINK_LOCAL,
-	NM_SETTING_IP6_CONFIG_METHOD_MANUAL,
-	NM_SETTING_IP6_CONFIG_METHOD_SHARED,
-	NULL
-};
-
 static gboolean
 nmc_property_ipv6_set_method (NMSetting *setting, const char *prop, const char *val, GError **error)
 {
+	const char **valid_values = nm_setting_property_get_valid_values (setting, prop);
+
 	/* Silently accept "static" and convert to "manual" */
 	if (val && strlen (val) > 1 && matches (val, "static") == 0)
 		val = NM_SETTING_IP6_CONFIG_METHOD_MANUAL;
 
-	return check_and_set_string (setting, prop, val, ipv6_valid_methods, error);
+	return check_and_set_string (setting, prop, val, valid_values, error);
 }
-
-DEFINE_ALLOWED_VAL_FUNC (nmc_property_ipv6_allowed_method, ipv6_valid_methods)
 
 /* 'dns' */
 static gboolean
@@ -4134,6 +4068,7 @@ nmc_property_ipv6_set_dns (NMSetting *setting, const char *prop, const char *val
 
 static gboolean
 _validate_and_remove_ipv6_dns (NMSettingIPConfig *setting,
+                               const char *prop,
                                const char *dns,
                                GError **error)
 {
@@ -4193,6 +4128,7 @@ nmc_property_ipv6_set_dns_search (NMSetting *setting, const char *prop, const ch
 
 static gboolean
 _validate_and_remove_ipv6_dns_search (NMSettingIPConfig *setting,
+                                      const char *prop,
                                       const char *dns_search,
                                       GError **error)
 {
@@ -4231,6 +4167,7 @@ nmc_property_ipv6_set_dns_options (NMSetting *setting, const char *prop, const c
 
 static gboolean
 _validate_and_remove_ipv6_dns_option (NMSettingIPConfig *setting,
+                                      const char *prop,
                                       const char *dns_option,
                                       GError **error)
 {
@@ -4280,6 +4217,7 @@ nmc_property_ipv6_set_addresses (NMSetting *setting, const char *prop, const cha
 
 static gboolean
 _validate_and_remove_ipv6_address (NMSettingIPConfig *setting,
+                                   const char *prop,
                                    const char *address,
                                    GError **error)
 {
@@ -4364,6 +4302,7 @@ nmc_property_ipv6_set_routes (NMSetting *setting, const char *prop, const char *
 
 static gboolean
 _validate_and_remove_ipv6_route (NMSettingIPConfig *setting,
+                                 const char *prop,
                                  const char *route,
                                  GError **error)
 {
@@ -4701,26 +4640,21 @@ DEFINE_REMOVER_OPTION (nmc_property_vpn_remove_option_secret,
  * NM core, nor in ifcfg-rh plugin. Enable this when it gets done.
  */
 /* 'port' */
-static const char *wired_valid_ports[] = { "tp", "aui", "bnc", "mii", NULL };
-
 static gboolean
 nmc_property_wired_set_port (NMSetting *setting, const char *prop, const char *val, GError **error)
 {
-	return check_and_set_string (setting, prop, val, wired_valid_ports, error);
+	const char **valid_values = nm_setting_property_get_valid_values (setting, prop);
+	return check_and_set_string (setting, prop, val, valid_values, error);
 }
 
-DEFINE_ALLOWED_VAL_FUNC (nmc_property_wired_allowed_port, wired_valid_ports)
-
 /* 'duplex' */
-static const char *wired_valid_duplexes[] = { "half", "full", NULL };
-
 static gboolean
 nmc_property_wired_set_duplex (NMSetting *setting, const char *prop, const char *val, GError **error)
 {
-	return check_and_set_string (setting, prop, val, wired_valid_duplexes, error);
+	const char **valid_values = nm_setting_property_get_valid_values (setting, prop);
+	return check_and_set_string (setting, prop, val, valid_values, error);
 }
 
-DEFINE_ALLOWED_VAL_FUNC (nmc_property_wired_allowed_duplex, wired_valid_duplexes)
 #endif
 
 /* 'mac-address-blacklist' */
@@ -4730,8 +4664,9 @@ DEFINE_SETTER_MAC_BLACKLIST (nmc_property_wired_set_mac_address_blacklist,
 
 static gboolean
 _validate_and_remove_wired_mac_blacklist_item (NMSettingWired *setting,
-                                              const char *mac,
-                                              GError **error)
+                                               const char *prop,
+                                               const char *mac,
+                                               GError **error)
 {
 	gboolean ret;
 	guint8 buf[32];
@@ -4781,15 +4716,12 @@ nmc_property_wired_describe_s390_subchannels (NMSetting *setting, const char *pr
 }
 
 /* 's390-nettype' */
-static const char *wired_valid_s390_nettypes[] = { "qeth", "lcs", "ctc", NULL };
-
 static gboolean
 nmc_property_wired_set_s390_nettype (NMSetting *setting, const char *prop, const char *val, GError **error)
 {
-	return check_and_set_string (setting, prop, val, wired_valid_s390_nettypes, error);
+	const char **valid_values = nm_setting_property_get_valid_values (setting, prop);
+	return check_and_set_string (setting, prop, val, valid_values, error);
 }
-
-DEFINE_ALLOWED_VAL_FUNC (nmc_property_wired_allowed_s390_nettype, wired_valid_s390_nettypes)
 
 /* 's390-options' */
 /* Validate value of 's390-options' */
@@ -4813,12 +4745,6 @@ DEFINE_REMOVER_OPTION (nmc_property_wired_remove_option_s390_options,
                        NM_SETTING_WIRED,
                        nm_setting_wired_remove_s390_option)
 
-static const char **
-nmc_property_wired_allowed_s390_options (NMSetting *setting, const char *prop)
-{
-	return nm_setting_wired_get_valid_s390_options (NM_SETTING_WIRED (setting));
-}
-
 static const char *
 nmc_property_wired_describe_s390_options (NMSetting *setting, const char *prop)
 {
@@ -4841,31 +4767,20 @@ nmc_property_wired_describe_s390_options (NMSetting *setting, const char *prop)
 
 /* --- NM_SETTING_WIRELESS_SETTING_NAME property setter functions --- */
 /* 'mode' */
-static const char *wifi_valid_modes[] = {
-	NM_SETTING_WIRELESS_MODE_INFRA,
-	NM_SETTING_WIRELESS_MODE_ADHOC,
-	NM_SETTING_WIRELESS_MODE_AP,
-	NULL
-};
-
 static gboolean
 nmc_property_wifi_set_mode (NMSetting *setting, const char *prop, const char *val, GError **error)
 {
-	return check_and_set_string (setting, prop, val, wifi_valid_modes, error);
+	const char **valid_values = nm_setting_property_get_valid_values (setting, prop);
+	return check_and_set_string (setting, prop, val, valid_values, error);
 }
 
-DEFINE_ALLOWED_VAL_FUNC (nmc_property_wifi_allowed_mode, wifi_valid_modes)
-
 /* 'band' */
-static const char *wifi_valid_bands[] = { "a", "bg", NULL };
-
 static gboolean
 nmc_property_wifi_set_band (NMSetting *setting, const char *prop, const char *val, GError **error)
 {
-	return check_and_set_string (setting, prop, val, wifi_valid_bands, error);
+	const char **valid_values = nm_setting_property_get_valid_values (setting, prop);
+	return check_and_set_string (setting, prop, val, valid_values, error);
 }
-
-DEFINE_ALLOWED_VAL_FUNC (nmc_property_wifi_allowed_band, wifi_valid_bands)
 
 /* 'channel' */
 static gboolean
@@ -4897,6 +4812,7 @@ DEFINE_SETTER_MAC_BLACKLIST (nmc_property_wireless_set_mac_address_blacklist,
 
 static gboolean
 _validate_and_remove_wifi_mac_blacklist_item (NMSettingWireless *setting,
+                                              const char *prop,
                                               const char *mac,
                                               GError **error)
 {
@@ -4975,30 +4891,22 @@ nmc_property_wireless_set_mac_address_randomization (NMSetting *setting,
 
 /* --- NM_SETTING_WIRELESS_SECURITY_SETTING_NAME property setter functions --- */
 /* 'key-mgmt' */
-static const char *wifi_sec_valid_key_mgmts[] = { "none", "ieee8021x", "wpa-none", "wpa-psk", "wpa-eap", NULL };
-
 static gboolean
 nmc_property_wifi_sec_set_key_mgmt (NMSetting *setting, const char *prop, const char *val, GError **error)
 {
-	return check_and_set_string (setting, prop, val, wifi_sec_valid_key_mgmts, error);
+	const char **valid_values = nm_setting_property_get_valid_values (setting, prop);
+	return check_and_set_string (setting, prop, val, valid_values, error);
 }
 
-DEFINE_ALLOWED_VAL_FUNC (nmc_property_wifi_sec_allowed_key_mgmt, wifi_sec_valid_key_mgmts)
-
 /* 'auth-alg' */
-static const char *wifi_sec_valid_auth_algs[] = { "open", "shared", "leap", NULL };
-
 static gboolean
 nmc_property_wifi_sec_set_auth_alg (NMSetting *setting, const char *prop, const char *val, GError **error)
 {
-	return check_and_set_string (setting, prop, val, wifi_sec_valid_auth_algs, error);
+	const char **valid_values = nm_setting_property_get_valid_values (setting, prop);
+	return check_and_set_string (setting, prop, val, valid_values, error);
 }
 
-DEFINE_ALLOWED_VAL_FUNC (nmc_property_wifi_sec_allowed_auth_alg, wifi_sec_valid_auth_algs)
-
 /* 'proto' */
-static const char *wifi_sec_valid_protos[] = { "wpa", "rsn", NULL };
-
 DEFINE_SETTER_STR_LIST_MULTI (check_and_add_wifi_sec_proto,
                               NM_SETTING_WIRELESS_SECURITY,
                               nm_setting_wireless_security_add_proto)
@@ -5006,18 +4914,21 @@ DEFINE_SETTER_STR_LIST_MULTI (check_and_add_wifi_sec_proto,
 static gboolean
 nmc_property_wifi_sec_set_proto (NMSetting *setting, const char *prop, const char *val, GError **error)
 {
-	return check_and_add_wifi_sec_proto (setting, prop, val, wifi_sec_valid_protos, error);
+	const char **valid_values = nm_setting_property_get_valid_values (setting, prop);
+	return check_and_add_wifi_sec_proto (setting, prop, val, valid_values, error);
 }
 
 static gboolean
 _validate_and_remove_wifi_sec_proto (NMSettingWirelessSecurity *setting,
+                                     const char *prop,
                                      const char *proto,
                                      GError **error)
 {
 	gboolean ret;
 	const char *valid;
+	const char **valid_values = nm_setting_property_get_valid_values (NM_SETTING (setting), prop);
 
-	valid = nmc_string_is_valid (proto, wifi_sec_valid_protos, error);
+	valid = nmc_string_is_valid (proto, valid_values, error);
 	if (!valid)
 		return FALSE;
 
@@ -5033,11 +4944,7 @@ DEFINE_REMOVER_INDEX_OR_VALUE (nmc_property_wifi_sec_remove_proto,
                                nm_setting_wireless_security_remove_proto,
                                _validate_and_remove_wifi_sec_proto)
 
-DEFINE_ALLOWED_VAL_FUNC (nmc_property_wifi_sec_allowed_proto, wifi_sec_valid_protos)
-
 /* 'pairwise' */
-static const char *wifi_sec_valid_pairwises[] = { "tkip", "ccmp", NULL };
-
 DEFINE_SETTER_STR_LIST_MULTI (check_and_add_wifi_sec_pairwise,
                               NM_SETTING_WIRELESS_SECURITY,
                               nm_setting_wireless_security_add_pairwise)
@@ -5045,18 +4952,21 @@ DEFINE_SETTER_STR_LIST_MULTI (check_and_add_wifi_sec_pairwise,
 static gboolean
 nmc_property_wifi_sec_set_pairwise (NMSetting *setting, const char *prop, const char *val, GError **error)
 {
-	return check_and_add_wifi_sec_pairwise (setting, prop, val, wifi_sec_valid_pairwises, error);
+	const char **valid_values = nm_setting_property_get_valid_values (setting, prop);
+	return check_and_add_wifi_sec_pairwise (setting, prop, val, valid_values, error);
 }
 
 static gboolean
 _validate_and_remove_wifi_sec_pairwise (NMSettingWirelessSecurity *setting,
+                                        const char *prop,
                                         const char *pairwise,
                                         GError **error)
 {
 	gboolean ret;
 	const char *valid;
+	const char **valid_values = nm_setting_property_get_valid_values (NM_SETTING (setting), prop);
 
-	valid = nmc_string_is_valid (pairwise, wifi_sec_valid_pairwises, error);
+	valid = nmc_string_is_valid (pairwise, valid_values, error);
 	if (!valid)
 		return FALSE;
 
@@ -5072,11 +4982,7 @@ DEFINE_REMOVER_INDEX_OR_VALUE (nmc_property_wifi_sec_remove_pairwise,
                                nm_setting_wireless_security_remove_pairwise,
                                _validate_and_remove_wifi_sec_pairwise)
 
-DEFINE_ALLOWED_VAL_FUNC (nmc_property_wifi_sec_allowed_pairwise, wifi_sec_valid_pairwises)
-
 /* 'group' */
-static const char *wifi_sec_valid_groups[] = { "wep40", "wep104", "tkip", "ccmp", NULL };
-
 DEFINE_SETTER_STR_LIST_MULTI (check_and_add_wifi_sec_group,
                               NM_SETTING_WIRELESS_SECURITY,
                               nm_setting_wireless_security_add_group)
@@ -5084,18 +4990,21 @@ DEFINE_SETTER_STR_LIST_MULTI (check_and_add_wifi_sec_group,
 static gboolean
 nmc_property_wifi_sec_set_group (NMSetting *setting, const char *prop, const char *val, GError **error)
 {
-	return check_and_add_wifi_sec_group (setting, prop, val, wifi_sec_valid_groups, error);
+	const char **valid_values = nm_setting_property_get_valid_values (setting, prop);
+	return check_and_add_wifi_sec_group (setting, prop, val, valid_values, error);
 }
 
 static gboolean
 _validate_and_remove_wifi_sec_group (NMSettingWirelessSecurity *setting,
+                                     const char *prop,
                                      const char *group,
                                      GError **error)
 {
 	gboolean ret;
 	const char *valid;
+	const char **valid_values = nm_setting_property_get_valid_values (NM_SETTING (setting), prop);
 
-	valid = nmc_string_is_valid (group, wifi_sec_valid_groups, error);
+	valid = nmc_string_is_valid (group, valid_values, error);
 	if (!valid)
 		return FALSE;
 
@@ -5110,7 +5019,6 @@ DEFINE_REMOVER_INDEX_OR_VALUE (nmc_property_wifi_sec_remove_group,
                                nm_setting_wireless_security_get_num_groups,
                                nm_setting_wireless_security_remove_group,
                                _validate_and_remove_wifi_sec_group)
-DEFINE_ALLOWED_VAL_FUNC (nmc_property_wifi_sec_allowed_group, wifi_sec_valid_groups)
 
 /* 'wep-key' */
 static gboolean
@@ -5479,17 +5387,12 @@ nmc_property_dcb_set_pg_traffic_class (NMSetting *setting, const char *prop, con
 }
 
 /* 'app-fcoe-mode' */
-static const char *_dcb_valid_fcoe_modes[] = { NM_SETTING_DCB_FCOE_MODE_FABRIC,
-                                               NM_SETTING_DCB_FCOE_MODE_VN2VN,
-                                               NULL };
-
 static gboolean
 nmc_property_dcb_set_app_fcoe_mode (NMSetting *setting, const char *prop, const char *val, GError **error)
 {
-	return check_and_set_string (setting, prop, val, _dcb_valid_fcoe_modes, error);
+	const char **dcb_valid_fcoe_modes = nm_setting_property_get_valid_values (setting, prop);
+	return check_and_set_string (setting, prop, val, dcb_valid_fcoe_modes, error);
 }
-
-DEFINE_ALLOWED_VAL_FUNC (nmc_property_dcb_allowed_app_fcoe_modes, _dcb_valid_fcoe_modes)
 
 static gboolean
 nmc_property_gsm_set_sim_operator_id (NMSetting *setting, const char *prop, const char *val, GError **error)
@@ -5558,9 +5461,12 @@ nmc_property_tun_set_mode (NMSetting *setting, const char *prop,
 	return TRUE;
 }
 
-static const char *tun_valid_modes[] = { "tun", "tap", "unknown", NULL };
-
-DEFINE_ALLOWED_VAL_FUNC (nmc_property_tun_allowed_mode, tun_valid_modes)
+static const char **
+nmc_property_tun_allowed_mode (NMSetting *setting, const char *property_name)
+{
+	static const char *tun_valid_modes[] = { "tun", "tap", "unknown", NULL };
+	return tun_valid_modes;
+}
 
 /*----------------------------------------------------------------------------*/
 
@@ -5610,7 +5516,7 @@ nmc_properties_init (void)
 	                    nmc_property_802_1X_set_eap,
 	                    nmc_property_802_1X_remove_eap,
 	                    NULL,
-	                    nmc_property_802_1X_allowed_eap,
+	                    nm_setting_property_get_valid_values,
 	                    NULL);
 	nmc_add_prop_funcs (GLUE (802_1X, IDENTITY),
 	                    nmc_property_802_1X_get_identity,
@@ -5673,35 +5579,35 @@ nmc_properties_init (void)
 	                    nmc_property_802_1X_set_phase1_peapver,
 	                    NULL,
 	                    NULL,
-	                    nmc_property_802_1X_allowed_phase1_peapver,
+	                    nm_setting_property_get_valid_values,
 	                    NULL);
 	nmc_add_prop_funcs (GLUE (802_1X, PHASE1_PEAPLABEL),
 	                    nmc_property_802_1X_get_phase1_peaplabel,
 	                    nmc_property_802_1X_set_phase1_peaplabel,
 	                    NULL,
 	                    NULL,
-	                    nmc_property_802_1X_allowed_phase1_peaplabel,
+	                    nm_setting_property_get_valid_values,
 	                    NULL);
 	nmc_add_prop_funcs (GLUE (802_1X, PHASE1_FAST_PROVISIONING),
 	                    nmc_property_802_1X_get_phase1_fast_provisioning,
 	                    nmc_property_802_1X_set_phase1_fast_provisioning,
 	                    NULL,
 	                    NULL,
-	                    nmc_property_802_1X_allowed_phase1_fast_provisioning,
+	                    nm_setting_property_get_valid_values,
 	                    NULL);
 	nmc_add_prop_funcs (GLUE (802_1X, PHASE2_AUTH),
 	                    nmc_property_802_1X_get_phase2_auth,
 	                    nmc_property_802_1X_set_phase2_auth,
 	                    NULL,
 	                    NULL,
-	                    nmc_property_802_1X_allowed_phase2_auth,
+	                    nm_setting_property_get_valid_values,
 	                    NULL);
 	nmc_add_prop_funcs (GLUE (802_1X, PHASE2_AUTHEAP),
 	                    nmc_property_802_1X_get_phase2_autheap,
 	                    nmc_property_802_1X_set_phase2_autheap,
 	                    NULL,
 	                    NULL,
-	                    nmc_property_802_1X_allowed_phase2_autheap,
+	                    nm_setting_property_get_valid_values,
 	                    NULL);
 	nmc_add_prop_funcs (GLUE (802_1X, PHASE2_CA_CERT),
 	                    nmc_property_802_1X_get_phase2_ca_cert,
@@ -5857,14 +5763,14 @@ nmc_properties_init (void)
 	                    nmc_property_adsl_set_protocol,
 	                    NULL,
 	                    NULL,
-	                    nmc_property_adsl_allowed_protocol,
+	                    nm_setting_property_get_valid_values,
 	                    NULL);
 	nmc_add_prop_funcs (GLUE (ADSL, ENCAPSULATION),
 	                    nmc_property_adsl_get_encapsulation,
 	                    nmc_property_adsl_set_encapsulation,
 	                    NULL,
 	                    NULL,
-	                    nmc_property_adsl_allowed_encapsulation,
+	                    nm_setting_property_get_valid_values,
 	                    NULL);
 	nmc_add_prop_funcs (GLUE (ADSL, VPI),
 	                    nmc_property_adsl_get_vpi,
@@ -5903,7 +5809,7 @@ nmc_properties_init (void)
 	                    nmc_property_bond_set_options,
 	                    nmc_property_bond_remove_option_options,
 	                    nmc_property_bond_describe_options,
-	                    nmc_property_bond_allowed_options,
+	                    nm_setting_property_get_valid_values,
 	                    NULL);
 
 	/* Add editable properties for NM_SETTING_BRIDGE_SETTING_NAME */
@@ -6101,7 +6007,7 @@ nmc_properties_init (void)
 	                    nmc_property_con_set_slave_type,
 	                    NULL,
 	                    NULL,
-	                    nmc_property_con_allowed_slave_type,
+	                    nm_setting_property_get_valid_values,
 	                    NULL);
 	nmc_add_prop_funcs (GLUE (CONNECTION, AUTOCONNECT_SLAVES),
 	                    nmc_property_connection_get_autoconnect_slaves,
@@ -6152,7 +6058,7 @@ nmc_properties_init (void)
 	                    nmc_property_dcb_set_app_fcoe_mode,
 	                    NULL,
 	                    NULL,
-	                    nmc_property_dcb_allowed_app_fcoe_modes,
+	                    nm_setting_property_get_valid_values,
 	                    NULL);
 	nmc_add_prop_funcs (GLUE (DCB, APP_FCOE_PRIORITY),
 	                    nmc_property_dcb_get_app_fcoe_priority,
@@ -6352,7 +6258,7 @@ nmc_properties_init (void)
 	                    nmc_property_ib_set_transport_mode,
 	                    NULL,
 	                    NULL,
-	                    nmc_property_ib_allowed_transport_mode,
+	                    nm_setting_property_get_valid_values,
 	                    NULL);
 	nmc_add_prop_funcs (GLUE (INFINIBAND, P_KEY),
 	                    nmc_property_ib_get_p_key,
@@ -6375,7 +6281,7 @@ nmc_properties_init (void)
 	                    nmc_property_ipv4_set_method,
 	                    NULL,
 	                    NULL,
-	                    nmc_property_ipv4_allowed_method,
+	                    nm_setting_property_get_valid_values,
 	                    NULL);
 	nmc_add_prop_funcs (GLUE_IP (4, DNS),
 	                    nmc_property_ipv4_get_dns,
@@ -6496,7 +6402,7 @@ nmc_properties_init (void)
 	                    nmc_property_ipv6_set_method,
 	                    NULL,
 	                    NULL,
-	                    nmc_property_ipv6_allowed_method,
+	                    nm_setting_property_get_valid_values,
 	                    NULL);
 	nmc_add_prop_funcs (GLUE_IP (6, DNS),
 	                    nmc_property_ipv6_get_dns,
@@ -6944,7 +6850,7 @@ nmc_properties_init (void)
 	                    NULL, /*nmc_property_wired_set_port,*/
 	                    NULL,
 	                    NULL,
-	                    NULL, /*nmc_property_wired_allowed_port,*/
+	                    NULL,
 	                    NULL);
 	nmc_add_prop_funcs (GLUE (WIRED, SPEED),
 	                    nmc_property_wired_get_speed,
@@ -6959,7 +6865,7 @@ nmc_properties_init (void)
 	                    NULL,
 	                    NULL,
 	                    NULL,
-	                    NULL); /*nmc_property_wired_allowed_duplex);*/
+	                    NULL);
 	nmc_add_prop_funcs (GLUE (WIRED, AUTO_NEGOTIATE),
 	                    nmc_property_wired_get_auto_negotiate,
 	                    NULL,
@@ -7007,14 +6913,14 @@ nmc_properties_init (void)
 	                    nmc_property_wired_set_s390_nettype,
 	                    NULL,
 	                    NULL,
-	                    nmc_property_wired_allowed_s390_nettype,
+	                    nm_setting_property_get_valid_values,
 	                    NULL);
 	nmc_add_prop_funcs (GLUE (WIRED, S390_OPTIONS),
 	                    nmc_property_wired_get_s390_options,
 	                    nmc_property_wired_set_s390_options,
 	                    nmc_property_wired_remove_option_s390_options,
 	                    nmc_property_wired_describe_s390_options,
-	                    nmc_property_wired_allowed_s390_options,
+	                    nm_setting_property_get_valid_values,
 	                    NULL);
 	nmc_add_prop_funcs (GLUE (WIRED, WAKE_ON_LAN),
 	                    nmc_property_wired_get_wake_on_lan,
@@ -7044,14 +6950,14 @@ nmc_properties_init (void)
 	                    nmc_property_wifi_set_mode,
 	                    NULL,
 	                    NULL,
-	                    nmc_property_wifi_allowed_mode,
+	                    nm_setting_property_get_valid_values,
 	                    NULL);
 	nmc_add_prop_funcs (GLUE (WIRELESS, BAND),
 	                    nmc_property_wireless_get_band,
 	                    nmc_property_wifi_set_band,
 	                    NULL,
 	                    NULL,
-	                    nmc_property_wifi_allowed_band,
+	                    nm_setting_property_get_valid_values,
 	                    NULL);
 	nmc_add_prop_funcs (GLUE (WIRELESS, CHANNEL),
 	                    nmc_property_wireless_get_channel,
@@ -7148,7 +7054,7 @@ nmc_properties_init (void)
 	                    nmc_property_wifi_sec_set_key_mgmt,
 	                    NULL,
 	                    NULL,
-	                    nmc_property_wifi_sec_allowed_key_mgmt,
+	                    nm_setting_property_get_valid_values,
 	                    NULL);
 	nmc_add_prop_funcs (GLUE (WIRELESS_SECURITY, WEP_TX_KEYIDX),
 	                    nmc_property_wifi_sec_get_wep_tx_keyidx,
@@ -7162,28 +7068,28 @@ nmc_properties_init (void)
 	                    nmc_property_wifi_sec_set_auth_alg,
 	                    NULL,
 	                    NULL,
-	                    nmc_property_wifi_sec_allowed_auth_alg,
+	                    nm_setting_property_get_valid_values,
 	                    NULL);
 	nmc_add_prop_funcs (GLUE (WIRELESS_SECURITY, PROTO),
 	                    nmc_property_wifi_sec_get_proto,
 	                    nmc_property_wifi_sec_set_proto,
 	                    nmc_property_wifi_sec_remove_proto,
 	                    NULL,
-	                    nmc_property_wifi_sec_allowed_proto,
+	                    nm_setting_property_get_valid_values,
 	                    NULL);
 	nmc_add_prop_funcs (GLUE (WIRELESS_SECURITY, PAIRWISE),
 	                    nmc_property_wifi_sec_get_pairwise,
 	                    nmc_property_wifi_sec_set_pairwise,
 	                    nmc_property_wifi_sec_remove_pairwise,
 	                    NULL,
-	                    nmc_property_wifi_sec_allowed_pairwise,
+	                    nm_setting_property_get_valid_values,
 	                    NULL);
 	nmc_add_prop_funcs (GLUE (WIRELESS_SECURITY, GROUP),
 	                    nmc_property_wifi_sec_get_group,
 	                    nmc_property_wifi_sec_set_group,
 	                    nmc_property_wifi_sec_remove_group,
 	                    NULL,
-	                    nmc_property_wifi_sec_allowed_group,
+	                    nm_setting_property_get_valid_values,
 	                    NULL);
 	nmc_add_prop_funcs (GLUE (WIRELESS_SECURITY, LEAP_USERNAME),
 	                    nmc_property_wifi_sec_get_leap_username,
@@ -7269,7 +7175,7 @@ nmc_properties_init (void)
 	                    nmc_property_tun_set_mode,
 	                    NULL,
 	                    NULL,
-	                    nmc_property_tun_allowed_mode,
+	                    nm_setting_property_get_valid_values,
 	                    NULL);
 	nmc_add_prop_funcs (GLUE (TUN, OWNER),
 	                    nmc_property_tun_get_owner,

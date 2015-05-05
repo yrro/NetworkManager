@@ -7596,6 +7596,42 @@ get_setting_and_property (const char *prompt, const char *line,
 	g_free (prop);
 }
 
+static const char **
+get_allowed_property_values (void)
+{
+	NMSetting *setting;
+	char *property;
+	const char **avals = NULL;
+
+	get_setting_and_property (rl_prompt, rl_line_buffer, &setting, &property);
+	if (setting && property)
+		avals = nmc_setting_get_property_allowed_values (setting, property);
+
+	if (setting)
+		g_object_unref (setting);
+	g_free (property);
+
+	return avals;
+}
+
+static gboolean
+should_complete_files (const char *prompt, const char *line)
+{
+	NMSetting *setting;
+	char *property;
+	gboolean is_filename = FALSE;
+
+	get_setting_and_property (prompt, line, &setting, &property);
+	if (setting && property)
+		is_filename = nm_setting_property_is_filename (setting, property);
+
+	if (setting)
+		g_object_unref (setting);
+	g_free (property);
+
+	return is_filename;
+}
+
 static gboolean
 _get_and_check_property (const char *prompt,
                          const char *line,
@@ -7618,27 +7654,6 @@ _get_and_check_property (const char *prompt,
 }
 
 static gboolean
-should_complete_files (const char *prompt, const char *line)
-{
-	const char *file_properties[] = {
-		/* '802-1x' properties */
-		"ca-cert",
-		"ca-path",
-		"client-cert",
-		"pac-file",
-		"phase2-ca-cert",
-		"phase2-ca-path",
-		"phase2-client-cert",
-		"private-key",
-		"phase2-private-key",
-		/* 'team' and 'team-port' properties */
-		"config",
-		NULL
-	};
-	return _get_and_check_property (prompt, line, file_properties, NULL, NULL);
-}
-
-static gboolean
 should_complete_vpn_uuids (const char *prompt, const char *line)
 {
 	const char *uuid_properties[] = {
@@ -7649,58 +7664,31 @@ should_complete_vpn_uuids (const char *prompt, const char *line)
 	return _get_and_check_property (prompt, line, uuid_properties, NULL, NULL);
 }
 
-static const char **
-get_allowed_property_values (void)
+static gboolean
+should_complete_property_values (const char *prompt, const char *line,
+                                 gboolean *multi, gboolean *hash)
 {
 	NMSetting *setting;
 	char *property;
-	const char **avals = NULL;
+	gboolean is_enumeration = FALSE;
+	gboolean is_multi = FALSE;
+	gboolean is_hash = FALSE;
 
-	get_setting_and_property (rl_prompt, rl_line_buffer, &setting, &property);
-	if (setting && property)
-		avals = nmc_setting_get_property_allowed_values (setting, property);
+	get_setting_and_property (prompt, line, &setting, &property);
+	if (setting && property) {
+		is_enumeration = !!nm_setting_property_get_valid_values (setting, property);
+		is_multi = nm_setting_property_is_multi_value (setting, property);
+		is_hash = nm_setting_property_is_hash (setting, property);
+	}
 
 	if (setting)
 		g_object_unref (setting);
 	g_free (property);
 
-	return avals;
-}
+	*multi = is_multi;
+	*hash = is_hash;
+	return is_enumeration;
 
-static gboolean
-should_complete_property_values (const char *prompt, const char *line, gboolean *multi)
-{
-	/* properties allowing multiple values */
-	const char *multi_props[] = {
-		/* '802-1x' properties */
-		NM_SETTING_802_1X_EAP,
-		/* '802-11-wireless-security' properties */
-		NM_SETTING_WIRELESS_SECURITY_PROTO,
-		NM_SETTING_WIRELESS_SECURITY_PAIRWISE,
-		NM_SETTING_WIRELESS_SECURITY_GROUP,
-		/* 'bond' properties */
-		NM_SETTING_BOND_OPTIONS,
-		/* 'ethernet' properties */
-		NM_SETTING_WIRED_S390_OPTIONS,
-		NULL
-	};
-	_get_and_check_property (prompt, line, NULL, multi_props, multi);
-	return get_allowed_property_values () != NULL;
-}
-
-//FIXME: this helper should go to libnm later
-static gboolean
-_setting_property_is_boolean (NMSetting *setting, const char *property_name)
-{
-	GParamSpec *pspec;
-
-	g_return_val_if_fail (NM_IS_SETTING (setting), FALSE);
-	g_return_val_if_fail (property_name, FALSE);
-
-	pspec = g_object_class_find_property (G_OBJECT_GET_CLASS (setting), property_name);
-	if (pspec && pspec->value_type == G_TYPE_BOOLEAN)
-		return TRUE;
-	return FALSE;
 }
 
 static gboolean
@@ -7712,7 +7700,7 @@ should_complete_boolean (const char *prompt, const char *line)
 
 	get_setting_and_property (prompt, line, &setting, &property);
 	if (setting && property)
-		is_boolean = _setting_property_is_boolean (setting, property);
+		is_boolean = nm_setting_property_is_boolean (setting, property);
 
 	if (setting)
 		g_object_unref (setting);
@@ -7756,6 +7744,9 @@ nmcli_editor_tab_completion (const char *text, int start, int end)
 	/* Restore standard append character to space */
 	rl_completion_append_character = ' ';
 
+	/* Use ' ' and '.' as word break characters */
+	rl_completer_word_break_characters = ". ";
+
 	/* Restore standard function for displaying matches */
 	rl_completion_display_matches_hook = NULL;
 
@@ -7785,7 +7776,7 @@ nmcli_editor_tab_completion (const char *text, int start, int end)
 		if (!strchr (prompt_tmp, '.')) {
 			int level = g_str_has_prefix (prompt_tmp, "nmcli>") ? 0 : 1;
 			const char *dot = strchr (line, '.');
-			gboolean multi;
+			gboolean multi, hash;
 
 			/* Main menu  - level 0,1 */
 			if (start == n1)
@@ -7809,9 +7800,13 @@ nmcli_editor_tab_completion (const char *text, int start, int end)
 						else if (should_complete_vpn_uuids (NULL, line)) {
 							rl_completion_display_matches_hook = uuid_display_hook;
 							generator_func = gen_vpn_uuids;
-						} else if (   should_complete_property_values (NULL, line, &multi)
-							   && (num == 3 || multi)) {
+						} else if (   should_complete_property_values (NULL, line, &multi, &hash)
+							   && (num == 3 || multi || hash)) {
 							generator_func = gen_property_values;
+							if (hash) {
+								rl_completion_append_character = '=';
+								rl_completer_word_break_characters = ", ";
+							}
 						} else if (should_complete_boolean (NULL, line) && num == 3)
 							generator_func = gen_func_bool_values;
 					}
@@ -7847,7 +7842,7 @@ nmcli_editor_tab_completion (const char *text, int start, int end)
 			if (start == n1)
 				generator_func = gen_nmcli_cmds_submenu;
 			else {
-				gboolean multi;
+				gboolean multi, hash;
 
 				if (   should_complete_cmd (line, end, "add", &num, NULL)
 				    || should_complete_cmd (line, end, "set", &num, NULL)) {
@@ -7856,9 +7851,13 @@ nmcli_editor_tab_completion (const char *text, int start, int end)
 					else if (should_complete_vpn_uuids (prompt_tmp, line)) {
 						rl_completion_display_matches_hook = uuid_display_hook;
 						generator_func = gen_vpn_uuids;
-					} else if (   should_complete_property_values (prompt_tmp, NULL, &multi)
-						   && (num <= 2 || multi)) {
+					} else if (   should_complete_property_values (prompt_tmp, NULL, &multi, &hash)
+						   && (num <= 2 || multi || hash)) {
 						generator_func = gen_property_values;
+						if (hash) {
+							rl_completion_append_character = '=';
+							rl_completer_word_break_characters = ", ";
+						}
 					} else if (should_complete_boolean (prompt_tmp, NULL) && num <= 2)
 						generator_func = gen_func_bool_values;
 				}
@@ -9864,8 +9863,6 @@ do_connection_edit (NmCli *nmc, int argc, char **argv)
 	/* Setup some readline completion stuff */
 	/* Set a pointer to an alternative function to create matches */
 	rl_attempted_completion_function = (rl_completion_func_t *) nmcli_editor_tab_completion;
-	/* Use ' ' and '.' as word break characters */
-	rl_completer_word_break_characters = ". ";
 
 	if (!con) {
 		if (con_id && !con_uuid && !con_path) {
