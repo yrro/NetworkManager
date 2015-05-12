@@ -960,6 +960,7 @@ global:
 	nm_setting_mac_randomization_get_type;
 	nm_setting_property_get_gtype;
 	nm_setting_property_get_valid_values;
+	nm_setting_property_is_boolean;
 	nm_setting_property_is_filename;
 	nm_setting_property_is_hash;
 	nm_setting_property_is_multi_value;

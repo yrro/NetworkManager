@@ -1985,6 +1985,30 @@ nm_setting_property_is_multi_value (NMSetting *setting, const char *property_nam
 	return !!g_param_spec_get_qdata (pspec, _property_metadata_multi_quark);
 }
 
+/** nm_setting_property_is_boolean:
+ * @setting: the #NMSetting
+ * @property_name: the name of the property
+ *
+ * Finds whether property with @property_name is of G_TYPE_BOOLEAN.
+ *
+ * Returns: %TRUE if property value type is boolean, %FALSE if not
+ *
+ * Since: 1.2
+ **/
+gboolean
+nm_setting_property_is_boolean (NMSetting *setting, const char *property_name)
+{
+	GParamSpec *pspec;
+
+	g_return_val_if_fail (NM_IS_SETTING (setting), FALSE);
+	g_return_val_if_fail (property_name, FALSE);
+
+	pspec = g_object_class_find_property (G_OBJECT_GET_CLASS (setting), property_name);
+	if (pspec && pspec->value_type == G_TYPE_BOOLEAN)
+		return TRUE;
+	return FALSE;
+}
+
 /**
  * nm_setting_property_is_hash:
  * @setting: the #NMSetting

@@ -321,6 +321,9 @@ gboolean      nm_setting_property_is_multi_value   (NMSetting *setting,
 NM_AVAILABLE_IN_1_2
 gboolean      nm_setting_property_is_hash          (NMSetting *setting,
                                                     const char *property_name);
+NM_AVAILABLE_IN_1_2
+gboolean      nm_setting_property_is_boolean       (NMSetting *setting,
+                                                    const char *property_name);
 
 G_END_DECLS
 
