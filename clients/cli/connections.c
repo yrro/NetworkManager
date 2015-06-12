@@ -7619,17 +7619,25 @@ should_complete_files (const char *prompt, const char *line)
 {
 	NMSetting *setting;
 	char *property;
-	gboolean is_filename = FALSE;
+	gboolean filename = FALSE;
 
 	get_setting_and_property (prompt, line, &setting, &property);
-	if (setting && property)
-		is_filename = nm_setting_property_is_filename (setting, property);
+	if (setting && property) {
+		filename =    nm_setting_property_is_filename (setting, property)
+		           || nm_setting_property_maybe_filename (setting, property);
+
+		/* Special case for team.config, team-port.config
+		   nmcli accepts filenames for these */
+		if (   (NM_IS_SETTING_TEAM (setting) || NM_IS_SETTING_TEAM_PORT (setting))
+		    && !strcmp (property, "config"))
+			filename = TRUE;
+	}
 
 	if (setting)
 		g_object_unref (setting);
 	g_free (property);
 
-	return is_filename;
+	return filename;
 }
 
 static gboolean
