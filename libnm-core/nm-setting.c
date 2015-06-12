@@ -311,6 +311,7 @@ static GQuark setting_properties_quark;
 /* Define quarks for property metadata */
 GQuark _property_metadata_valid_values_quark;
 GQuark _property_metadata_filename_quark;
+GQuark _property_metadata_maybe_filename_quark;
 GQuark _property_metadata_multi_quark;
 
 static NMSettingProperty *
@@ -1960,6 +1961,33 @@ nm_setting_property_is_filename (NMSetting *setting, const char *property_name)
 	return !!g_param_spec_get_qdata (pspec, _property_metadata_filename_quark);
 }
 
+/**
+ * nm_setting_property_maybe_filename:
+ * @setting: the #NMSetting
+ * @property_name: the name of the property
+ *
+ * Finds whether property with @property_name can contain a file name, i.e. it has
+ * NM_SETTING_PROPERTY_METADATA_MAYBE_FILENAME metadata attached. An example is
+ * ca-cert property that can be filename path or binary data blob.
+ *
+ * Returns: %TRUE if property may be a file name, %FALSE it cannot
+ *
+ * Since: 1.2
+ **/
+gboolean
+nm_setting_property_maybe_filename (NMSetting *setting, const char *property_name)
+{
+	GParamSpec *pspec;
+
+	g_return_val_if_fail (NM_IS_SETTING (setting), FALSE);
+	g_return_val_if_fail (property_name, FALSE);
+
+	pspec = g_object_class_find_property (G_OBJECT_GET_CLASS (setting), property_name);
+	if (!pspec)
+		return FALSE;
+	return !!g_param_spec_get_qdata (pspec, _property_metadata_maybe_filename_quark);
+}
+
 /** nm_setting_property_is_multi_value:
  * @setting: the #NMSetting
  * @property_name: the name of the property
@@ -2132,7 +2160,7 @@ _nm_setting_property_set_valid_values (GParamSpec *pspec,
  * _nm_setting_property_set_is_filename:
  * @pspec: a GParamSpec specifying the property
  *
- * Marks the property described by @pspec as a property holding file names.
+ * Marks the property described by @pspec as a property holding a file name.
  */
 void
 _nm_setting_property_set_is_filename (GParamSpec *pspec)
@@ -2140,6 +2168,20 @@ _nm_setting_property_set_is_filename (GParamSpec *pspec)
 	g_return_if_fail (G_IS_PARAM_SPEC (pspec));
 
 	g_param_spec_set_qdata (pspec, _property_metadata_filename_quark, GUINT_TO_POINTER (TRUE));
+}
+
+/**
+ * _nm_setting_property_set_maybe_filename:
+ * @pspec: a GParamSpec specifying the property
+ *
+ * Marks the property described by @pspec as a property that may hold a file name.
+ */
+void
+_nm_setting_property_set_maybe_filename (GParamSpec *pspec)
+{
+	g_return_if_fail (G_IS_PARAM_SPEC (pspec));
+
+	g_param_spec_set_qdata (pspec, _property_metadata_maybe_filename_quark, GUINT_TO_POINTER (TRUE));
 }
 
 /**
@@ -2203,6 +2245,8 @@ nm_setting_class_init (NMSettingClass *setting_class)
 		_property_metadata_valid_values_quark = g_quark_from_static_string (NM_SETTING_PROPERTY_METADATA_VALID_VALUES);
 	if (!_property_metadata_filename_quark)
 		_property_metadata_filename_quark = g_quark_from_static_string (NM_SETTING_PROPERTY_METADATA_FILENAME);
+	if (!_property_metadata_maybe_filename_quark)
+		_property_metadata_maybe_filename_quark = g_quark_from_static_string (NM_SETTING_PROPERTY_METADATA_MAYBE_FILENAME);
 	if (!_property_metadata_multi_quark)
 		_property_metadata_multi_quark = g_quark_from_static_string (NM_SETTING_PROPERTY_METADATA_MULTI);
 

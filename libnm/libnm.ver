@@ -964,6 +964,7 @@ global:
 	nm_setting_property_is_filename;
 	nm_setting_property_is_hash;
 	nm_setting_property_is_multi_value;
+	nm_setting_property_maybe_filename;
 	nm_setting_tun_get_group;
 	nm_setting_tun_get_mode;
 	nm_setting_tun_get_multi_queue;

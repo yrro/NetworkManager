@@ -3250,12 +3250,12 @@ nm_setting_802_1x_class_init (NMSetting8021xClass *setting_class)
 	 * example: IEEE_8021X_CA_CERT=/home/joe/cacert.crt
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_CA_CERT,
-		 g_param_spec_boxed (NM_SETTING_802_1X_CA_CERT, "", "",
-		                     G_TYPE_BYTES,
-		                     G_PARAM_READWRITE |
-		                     G_PARAM_STATIC_STRINGS));
+	pspec = g_param_spec_boxed (NM_SETTING_802_1X_CA_CERT, "", "",
+	                            G_TYPE_BYTES,
+	                            G_PARAM_READWRITE |
+	                            G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_CA_CERT, pspec);
+	_nm_setting_property_set_maybe_filename (pspec);
 
 	/**
 	 * NMSetting8021x:ca-path:
@@ -3342,12 +3342,12 @@ nm_setting_802_1x_class_init (NMSetting8021xClass *setting_class)
 	 * example: IEEE_8021X_CLIENT_CERT=/home/joe/mycert.crt
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_CLIENT_CERT,
-		 g_param_spec_boxed (NM_SETTING_802_1X_CLIENT_CERT, "", "",
-		                     G_TYPE_BYTES,
-		                     G_PARAM_READWRITE |
-		                     G_PARAM_STATIC_STRINGS));
+	pspec = g_param_spec_boxed (NM_SETTING_802_1X_CLIENT_CERT, "", "",
+	                            G_TYPE_BYTES,
+	                            G_PARAM_READWRITE |
+	                            G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_CLIENT_CERT, pspec);
+	_nm_setting_property_set_maybe_filename (pspec);
 
 	/**
 	 * NMSetting8021x:phase1-peapver:
@@ -3492,12 +3492,12 @@ nm_setting_802_1x_class_init (NMSetting8021xClass *setting_class)
 	 * Setting this property directly is discouraged; use the
 	 * nm_setting_802_1x_set_phase2_ca_cert() function instead.
 	 **/
-	g_object_class_install_property
-		(object_class, PROP_PHASE2_CA_CERT,
-		 g_param_spec_boxed (NM_SETTING_802_1X_PHASE2_CA_CERT, "", "",
-		                     G_TYPE_BYTES,
-		                     G_PARAM_READWRITE |
-		                     G_PARAM_STATIC_STRINGS));
+	pspec = g_param_spec_boxed (NM_SETTING_802_1X_PHASE2_CA_CERT, "", "",
+	                            G_TYPE_BYTES,
+	                            G_PARAM_READWRITE |
+	                            G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_PHASE2_CA_CERT, pspec);
+	_nm_setting_property_set_maybe_filename (pspec);
 
 	/**
 	 * NMSetting8021x:phase2-ca-path:
@@ -3581,12 +3581,12 @@ nm_setting_802_1x_class_init (NMSetting8021xClass *setting_class)
 	 * example: IEEE_8021X_INNER_CLIENT_CERT=/home/joe/mycert.crt
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_PHASE2_CLIENT_CERT,
-		 g_param_spec_boxed (NM_SETTING_802_1X_PHASE2_CLIENT_CERT, "", "",
-		                     G_TYPE_BYTES,
-		                     G_PARAM_READWRITE |
-		                     G_PARAM_STATIC_STRINGS));
+	pspec = g_param_spec_boxed (NM_SETTING_802_1X_PHASE2_CLIENT_CERT, "", "",
+	                            G_TYPE_BYTES,
+	                            G_PARAM_READWRITE |
+	                            G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_PHASE2_CLIENT_CERT, pspec);
+	_nm_setting_property_set_maybe_filename (pspec);
 
 	/**
 	 * NMSetting8021x:password:
@@ -3709,12 +3709,12 @@ nm_setting_802_1x_class_init (NMSetting8021xClass *setting_class)
 	 * example: IEEE_8021X_PRIVATE_KEY=/home/joe/mykey.p12
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_PRIVATE_KEY,
-		 g_param_spec_boxed (NM_SETTING_802_1X_PRIVATE_KEY, "", "",
-		                     G_TYPE_BYTES,
-		                     G_PARAM_READWRITE |
-		                     G_PARAM_STATIC_STRINGS));
+	pspec = g_param_spec_boxed (NM_SETTING_802_1X_PRIVATE_KEY, "", "",
+	                            G_TYPE_BYTES,
+	                            G_PARAM_READWRITE |
+	                            G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_PRIVATE_KEY, pspec);
+	_nm_setting_property_set_maybe_filename (pspec);
 
 	/**
 	 * NMSetting8021x:private-key-password:
@@ -3794,12 +3794,12 @@ nm_setting_802_1x_class_init (NMSetting8021xClass *setting_class)
 	 * description: Private key for inner authentication method for EAP-TLS.
 	 * ---end---
 	 */
-	g_object_class_install_property
-		(object_class, PROP_PHASE2_PRIVATE_KEY,
-		 g_param_spec_boxed (NM_SETTING_802_1X_PHASE2_PRIVATE_KEY, "", "",
-		                     G_TYPE_BYTES,
-		                     G_PARAM_READWRITE |
-		                     G_PARAM_STATIC_STRINGS));
+	pspec = g_param_spec_boxed (NM_SETTING_802_1X_PHASE2_PRIVATE_KEY, "", "",
+	                            G_TYPE_BYTES,
+	                            G_PARAM_READWRITE |
+	                            G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property (object_class, PROP_PHASE2_PRIVATE_KEY, pspec);
+	_nm_setting_property_set_maybe_filename (pspec);
 
 	/**
 	 * NMSetting8021x:phase2-private-key-password:
