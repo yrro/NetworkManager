@@ -93,6 +93,9 @@ const char **nm_setting_bond_get_valid_options  (NMSettingBond *setting);
 const char * nm_setting_bond_get_option_default (NMSettingBond *setting,
                                                  const char *name);
 
+NM_AVAILABLE_IN_1_2
+const char **nm_setting_bond_get_option_valid_values (const char *name);
+
 G_END_DECLS
 
 #endif /* __NM_SETTING_BOND_H__ */

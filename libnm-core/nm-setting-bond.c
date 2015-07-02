@@ -114,6 +114,18 @@ get_valid_options (void)
 	return array;
 }
 
+static const char **
+get_valid_option_values (const char *name)
+{
+	int i;
+
+	for (i = 0; i < G_N_ELEMENTS (defaults); i++) {
+		if (g_strcmp0 (defaults[i].opt, name) == 0)
+			return (const char **) defaults[i].list;
+	}
+	return NULL;
+}
+
 /**
  * nm_setting_bond_new:
  *
@@ -437,6 +449,23 @@ nm_setting_bond_get_option_default (NMSettingBond *setting, const char *name)
 	}
 	/* Any option that passes nm_setting_bond_validate_option() should also be found in defaults */
 	g_assert_not_reached ();
+}
+
+/**
+ * nm_setting_bond_get_option_valid_values:
+ * @name: the name of the option
+ *
+ * Return a list of valid values for option @name.
+ *
+ * Returns: (transfer none): a %NULL-terminated array of strings of valid values
+ *   for option @name, or %NULL.
+ *
+ * Since: 1.2
+ **/
+const char **
+nm_setting_bond_get_option_valid_values (const char *name)
+{
+	return get_valid_option_values (name);
 }
 
 static gboolean
