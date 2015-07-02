@@ -7613,6 +7613,43 @@ get_allowed_property_values (void)
 	return avals;
 }
 
+static const char **
+get_allowed_option_values (const char *text)
+{
+	NMSetting *setting;
+	char *property;
+	const char **avals = NULL;
+
+	get_setting_and_property (rl_prompt, rl_line_buffer, &setting, &property);
+	if (setting && property) {
+		char *opt, *tmp;
+		const char *p, *start, *end;
+		/* Extract option name */
+		p = g_strrstr_len (rl_line_buffer, rl_point, "=");
+		if (p) {
+			p--;
+			while (p > rl_line_buffer && g_ascii_isspace (*p))
+				p--;
+			end = p + 1;
+			while (p > rl_line_buffer && !strchr (",= ", *p))
+				p--;
+			start = p + 1;
+			opt = g_strndup (start, end - start);
+
+			tmp = g_strdup_printf ("%s.%s", property, opt);
+			avals = nm_setting_property_get_valid_values (setting, tmp);
+			g_free (opt);
+			g_free (tmp);
+		}
+	}
+
+	if (setting)
+		g_object_unref (setting);
+	g_free (property);
+
+	return avals;
+}
+
 static gboolean
 should_complete_files (const char *prompt, const char *line)
 {
@@ -7699,6 +7736,21 @@ should_complete_property_values (const char *prompt, const char *line,
 }
 
 static gboolean
+should_complete_option_values (const char *text, const char *line, int start, int end)
+{
+	int i;
+
+	/* Find out if value should be completed rather than the option name */
+	for (i = start - 1; i > 0; i--) {
+		if (line[i] == '=')
+			return TRUE;
+		if (line[i] == ',')
+			return FALSE;
+	}
+	return FALSE;
+}
+
+static gboolean
 should_complete_boolean (const char *prompt, const char *line)
 {
 	NMSetting *setting;
@@ -7723,6 +7775,18 @@ gen_property_values (const char *text, int state)
 	const char **avals;
 
 	avals = get_allowed_property_values ();
+	if (avals)
+		ret = nmc_rl_gen_func_basic (text, state, avals);
+	return ret;
+}
+
+static char *
+gen_option_values (const char *text, int state)
+{
+	char *ret = NULL;
+	const char **avals;
+
+	avals = get_allowed_option_values (text);
 	if (avals)
 		ret = nmc_rl_gen_func_basic (text, state, avals);
 	return ret;
@@ -7809,10 +7873,16 @@ nmcli_editor_tab_completion (const char *text, int start, int end)
 							generator_func = gen_vpn_uuids;
 						} else if (   should_complete_property_values (NULL, line, &multi, &hash)
 							   && (num == 3 || multi || hash)) {
-							generator_func = gen_property_values;
-							if (hash) {
-								rl_completion_append_character = '=';
-								rl_completer_word_break_characters = ", ";
+							if (should_complete_option_values (text, line, start, end)) {
+								generator_func = gen_option_values;
+								rl_completion_append_character = ',';
+								rl_completer_word_break_characters = ",= ";
+							} else {
+								generator_func = gen_property_values;
+								if (hash) {
+									rl_completion_append_character = '=';
+									rl_completer_word_break_characters = ",= ";
+								}
 							}
 						} else if (should_complete_boolean (NULL, line) && num == 3)
 							generator_func = gen_func_bool_values;
