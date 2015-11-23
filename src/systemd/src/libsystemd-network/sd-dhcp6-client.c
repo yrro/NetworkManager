@@ -1302,4 +1302,3 @@ int sd_dhcp6_client_new(sd_dhcp6_client **ret) {
 
         return 0;
 }
-

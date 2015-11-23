@@ -99,6 +99,7 @@ int rmdir_parents(const char *path, const char *stop) {
         return 0;
 }
 
+
 int rename_noreplace(int olddirfd, const char *oldpath, int newdirfd, const char *newpath) {
         struct stat buf;
         int ret;

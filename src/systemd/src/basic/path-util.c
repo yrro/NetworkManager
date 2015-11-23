@@ -56,7 +56,6 @@
 #include "util.h"
 
 #if 0 /* NM_IGNORED */
-
 bool path_is_absolute(const char *p) {
         return p[0] == '/';
 }
