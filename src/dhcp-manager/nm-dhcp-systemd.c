@@ -691,6 +691,7 @@ dhcp6_event_cb (sd_dhcp6_client *client, int event, gpointer user_data)
 static gboolean
 ip6_start (NMDhcpClient *client,
            const char *dhcp_anycast_addr,
+           const struct in6_addr *ll_addr,
            gboolean info_only,
            NMSettingIP6ConfigPrivacy privacy,
            const GByteArray *duid)
@@ -759,6 +760,12 @@ ip6_start (NMDhcpClient *client,
 	for (i = 0; dhcp6_requests[i].name; i++) {
 		if (dhcp6_requests[i].include)
 			sd_dhcp6_client_set_request_option (priv->client6, dhcp6_requests[i].num);
+	}
+
+	r = sd_dhcp6_client_set_local_address (priv->client6, ll_addr);
+	if (r < 0) {
+		nm_log_warn (LOGD_DHCP6, "(%s): failed to set local address (%d)", iface, r);
+		goto error;
 	}
 
 	r = sd_dhcp6_client_start (priv->client6);
