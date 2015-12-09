@@ -6748,8 +6748,7 @@ gen_func_bt_type (const char *text, int state)
 static char *
 gen_func_bond_mode (const char *text, int state)
 {
-	const char *words[] = { "balance-rr", "active-backup", "balance-xor", "broadcast",
-	                        "802.3ad", "balance-tlb", "balance-alb", NULL };
+	const char **words = nm_setting_bond_get_option_valid_values (NM_SETTING_BOND_OPTION_MODE);
 	return nmc_rl_gen_func_basic (text, state, words);
 }
 static char *
