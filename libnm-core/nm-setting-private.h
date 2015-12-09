@@ -33,6 +33,7 @@ extern GQuark _property_metadata_valid_values_quark;
 extern GQuark _property_metadata_filename_quark;
 extern GQuark _property_metadata_maybe_filename_quark;
 extern GQuark _property_metadata_multi_quark;
+extern GQuark _property_metadata_hash_values_func_quark;
 
 /**
  * NMSettingVerifyResult:
@@ -190,6 +191,8 @@ void _nm_setting_property_set_valid_values (GParamSpec *pspec,
 void _nm_setting_property_set_is_filename (GParamSpec *pspec);
 void _nm_setting_property_set_maybe_filename (GParamSpec *pspec);
 void _nm_setting_property_set_is_multi_value (GParamSpec *pspec);
+void _nm_setting_property_set_hash_values_func (GParamSpec *pspec,
+                                                const char **(values_func)(const char *));
 
 GPtrArray  *_nm_setting_need_secrets (NMSetting *setting);
 

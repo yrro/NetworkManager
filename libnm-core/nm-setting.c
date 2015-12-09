@@ -313,6 +313,7 @@ GQuark _property_metadata_valid_values_quark;
 GQuark _property_metadata_filename_quark;
 GQuark _property_metadata_maybe_filename_quark;
 GQuark _property_metadata_multi_quark;
+GQuark _property_metadata_hash_values_func_quark;
 
 static NMSettingProperty *
 find_property (GArray *properties, const char *name)
@@ -1925,14 +1926,35 @@ const char **
 nm_setting_property_get_valid_values (NMSetting *setting, const char *property_name)
 {
 	GParamSpec *pspec;
+	const char **ret = NULL;
+	char *p = NULL;
 
 	g_return_val_if_fail (NM_IS_SETTING (setting), NULL);
 	g_return_val_if_fail (property_name, NULL);
 
+	p = strchr (property_name, '.');
+	if (p)
+		*p = '\0';
+
 	pspec = g_object_class_find_property (G_OBJECT_GET_CLASS (setting), property_name);
 	if (!pspec)
-		return NULL;
-	return g_param_spec_get_qdata (pspec, _property_metadata_valid_values_quark);
+		goto done;
+
+	if (!p) {
+		return g_param_spec_get_qdata (pspec, _property_metadata_valid_values_quark);
+	} else {
+		/* peek into hash */
+		const char **(*values_func)(const char *);
+		values_func = g_param_spec_get_qdata (pspec, _property_metadata_hash_values_func_quark);
+		if (!values_func)
+			goto done;
+		ret = values_func (p + 1);
+	}
+
+done:
+	if (p)
+		*p = '.';
+	return ret;
 }
 
 /**
@@ -2199,6 +2221,23 @@ _nm_setting_property_set_is_multi_value (GParamSpec *pspec)
 	g_param_spec_set_qdata (pspec, _property_metadata_multi_quark, GUINT_TO_POINTER (TRUE));
 }
 
+/**
+ * _nm_setting_property_set_hash_values_func:
+ * @pspec: a GParamSpec specifying the property
+ * @values_func: function returning NULL-terminated string array of valid values
+ *   for options inside the hash property
+ *
+ * Attaches @valid_values to the property described by @pspec.
+ */
+void
+_nm_setting_property_set_hash_values_func (GParamSpec *pspec,
+                                           const char **(values_func)(const char *))
+{
+	g_return_if_fail (G_IS_PARAM_SPEC (pspec));
+
+	g_param_spec_set_qdata (pspec, _property_metadata_hash_values_func_quark, values_func);
+}
+
 /*****************************************************************************/
 
 static void
@@ -2249,6 +2288,8 @@ nm_setting_class_init (NMSettingClass *setting_class)
 		_property_metadata_maybe_filename_quark = g_quark_from_static_string (NM_SETTING_PROPERTY_METADATA_MAYBE_FILENAME);
 	if (!_property_metadata_multi_quark)
 		_property_metadata_multi_quark = g_quark_from_static_string (NM_SETTING_PROPERTY_METADATA_MULTI);
+	if (!_property_metadata_hash_values_func_quark)
+		_property_metadata_hash_values_func_quark = g_quark_from_static_string (NM_SETTING_PROPERTY_METADATA_HASH_VALUES_FUNC);
 
 	g_type_class_add_private (setting_class, sizeof (NMSettingPrivate));
 

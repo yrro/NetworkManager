@@ -786,6 +786,7 @@ nm_setting_bond_class_init (NMSettingBondClass *setting_class)
 	                            G_PARAM_STATIC_STRINGS);
 	g_object_class_install_property (object_class, PROP_OPTIONS, pspec);
 	_nm_setting_property_set_valid_values (pspec, get_valid_options ());
+	_nm_setting_property_set_hash_values_func (pspec, get_valid_option_values);
 	_nm_setting_class_transform_property (parent_class, NM_SETTING_BOND_OPTIONS,
 	                                      G_VARIANT_TYPE ("a{ss}"),
 	                                      _nm_utils_strdict_to_dbus,

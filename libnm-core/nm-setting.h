@@ -307,6 +307,7 @@ const GVariantType *nm_setting_get_dbus_property_type (NMSetting *setting,
 #define NM_SETTING_PROPERTY_METADATA_FILENAME       "metadata-filename"
 #define NM_SETTING_PROPERTY_METADATA_MAYBE_FILENAME "metadata-maybe-filename"
 #define NM_SETTING_PROPERTY_METADATA_MULTI          "metadata-multi"
+#define NM_SETTING_PROPERTY_METADATA_HASH_VALUES_FUNC "metadata-hash-values-func"
 NM_AVAILABLE_IN_1_2
 GType         nm_setting_property_get_gtype        (NMSetting *setting,
                                                     const char *property_name);
