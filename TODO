@@ -354,3 +354,4 @@ Consequently the same behavior should be used when a better connection becomes
 available.  This behavior should be suspended when special connections like
 Internet Connection Sharing ones are started, where clearly the priorities
 are different (ie, for Mobile Hotspot 3G > WiFi).
+
