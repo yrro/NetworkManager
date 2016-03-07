@@ -1130,6 +1130,8 @@ retry_connections_for_parent_device (NMManager *self, NMDevice *device)
 {
 	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (self);
 	GSList *connections, *iter;
+	gs_free_error GError *error = NULL;
+	gs_free char *ifname = NULL;
 
 	g_return_if_fail (device);
 
@@ -1139,8 +1141,14 @@ retry_connections_for_parent_device (NMManager *self, NMDevice *device)
 		NMDevice *parent;
 
 		parent = find_parent_device_for_connection (self, candidate, NULL);
-		if (parent == device)
-			connection_changed (priv->settings, candidate, self);
+		if (parent == device) {
+			/* Only try to activate devices that don't already exist */
+			ifname = nm_manager_get_connection_iface (self, candidate, &parent, &error);
+			if (ifname) {
+				if (!nm_platform_link_get_by_ifname (NM_PLATFORM_GET, ifname))
+					connection_changed (priv->settings, candidate, self);
+			}
+		}
 	}
 
 	g_slist_free (connections);
