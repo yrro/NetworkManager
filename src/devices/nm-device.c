@@ -414,6 +414,8 @@ static NMActStageReturn dhcp4_start (NMDevice *self, NMConnection *connection, N
 static gboolean dhcp6_start (NMDevice *self, gboolean wait_for_ll, NMDeviceStateReason *reason);
 static void nm_device_start_ip_check (NMDevice *self);
 static void realize_start_setup (NMDevice *self, const NMPlatformLink *plink);
+static void ip6_managed_setup (NMDevice *self);
+static void nm_device_cleanup (NMDevice *self, NMDeviceStateReason reason, CleanupType cleanup_type);
 
 /***********************************************************/
 
@@ -7627,6 +7629,11 @@ _device_activate (NMDevice *self, NMActRequest *req)
 	if (nm_active_connection_get_state (NM_ACTIVE_CONNECTION (req)) >= NM_ACTIVE_CONNECTION_STATE_DEACTIVATING)
 		return FALSE;
 
+	if (!nm_active_connection_get_assumed (NM_ACTIVE_CONNECTION (req))) {
+		ip6_managed_setup (self);
+		nm_device_cleanup (self, NM_DEVICE_STATE_REASON_NOW_MANAGED, CLEANUP_TYPE_DECONFIGURE);
+	}
+
 	priv = NM_DEVICE_GET_PRIVATE (self);
 
 	connection = nm_act_request_get_applied_connection (req);
@@ -10417,19 +10424,10 @@ _set_state_full (NMDevice *self,
 		}
 		break;
 	case NM_DEVICE_STATE_UNAVAILABLE:
-		if (old_state == NM_DEVICE_STATE_UNMANAGED) {
+		if (old_state == NM_DEVICE_STATE_UNMANAGED)
 			save_ip6_properties (self);
-			if (reason != NM_DEVICE_STATE_REASON_CONNECTION_ASSUMED)
-				ip6_managed_setup (self);
-		}
 
 		if (reason != NM_DEVICE_STATE_REASON_CONNECTION_ASSUMED) {
-			if (old_state == NM_DEVICE_STATE_UNMANAGED || priv->firmware_missing) {
-				if (!nm_device_bring_up (self, TRUE, &no_firmware) && no_firmware)
-					_LOGW (LOGD_HW, "firmware may be missing.");
-				nm_device_set_firmware_missing (self, no_firmware ? TRUE : FALSE);
-			}
-
 			/* Ensure the device gets deactivated in response to stuff like
 			 * carrier changes or rfkill.  But don't deactivate devices that are
 			 * about to assume a connection since that defeats the purpose of
@@ -10438,7 +10436,19 @@ _set_state_full (NMDevice *self,
 			 * Note that we "deactivate" the device even when coming from
 			 * UNMANAGED, to ensure that it's in a clean state.
 			 */
-			nm_device_cleanup (self, reason, CLEANUP_TYPE_DECONFIGURE);
+			if (old_state == NM_DEVICE_STATE_UNMANAGED || priv->firmware_missing) {
+				if (!nm_device_is_up (self)) {
+					/* Enable usermode IPv6, so that LL addresses will not be generated
+					 * when bringing interfaces up.
+					 */
+					ip6_managed_setup (self);
+					if (!nm_device_bring_up (self, TRUE, &no_firmware) && no_firmware)
+						_LOGW (LOGD_HW, "firmware may be missing.");
+					nm_device_set_firmware_missing (self, no_firmware ? TRUE : FALSE);
+
+					nm_device_cleanup (self, reason, CLEANUP_TYPE_DECONFIGURE);
+				}
+			}
 		}
 		break;
 	case NM_DEVICE_STATE_DISCONNECTED:
@@ -10449,13 +10459,6 @@ _set_state_full (NMDevice *self,
 			set_nm_ipv6ll (self, TRUE);
 
 			nm_device_cleanup (self, reason, CLEANUP_TYPE_DECONFIGURE);
-		} else if (old_state < NM_DEVICE_STATE_DISCONNECTED) {
-			if (reason != NM_DEVICE_STATE_REASON_CONNECTION_ASSUMED) {
-				/* Ensure IPv6 is set up as it may not have been done when
-				 * entering the UNAVAILABLE state depending on the reason.
-				 */
-				ip6_managed_setup (self);
-			}
 		}
 		break;
 	case NM_DEVICE_STATE_NEED_AUTH:
