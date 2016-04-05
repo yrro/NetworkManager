@@ -2870,14 +2870,7 @@ nm_platform_ip6_route_get_all (NMPlatform *self, int ifindex, NMPlatformGetRoute
 /**
  * nm_platform_ip4_route_add:
  * @self:
- * @ifindex:
- * @source:
- * network:
- * plen:
- * gateway:
- * pref_src:
- * metric:
- * mss:
+ * @route:
  *
  * For kernel, a gateway can be either explicitly set or left
  * at zero (0.0.0.0). In addition, there is the scope of the IPv4
@@ -2898,99 +2891,69 @@ nm_platform_ip6_route_get_all (NMPlatform *self, int ifindex, NMPlatformGetRoute
  * Returns: %TRUE in case of success.
  */
 gboolean
-nm_platform_ip4_route_add (NMPlatform *self,
-                           int ifindex, NMIPConfigSource source,
-                           in_addr_t network, guint8 plen,
-                           in_addr_t gateway, in_addr_t pref_src,
-                           guint32 metric, guint32 mss)
+nm_platform_ip4_route_add (NMPlatform *self, const NMPlatformIP4Route *route)
 {
 	_CHECK_SELF (self, klass, FALSE);
 
-	g_return_val_if_fail (plen <= 32, FALSE);
+	g_return_val_if_fail (route, FALSE);
+	g_return_val_if_fail (route->plen <= 32, FALSE);
 
-	if (_LOGD_ENABLED ()) {
-		NMPlatformIP4Route route = { 0 };
-
-		route.ifindex = ifindex;
-		route.rt_source = source;
-		route.network = network;
-		route.plen = plen;
-		route.gateway = gateway;
-		route.metric = metric;
-		route.mss = mss;
-		route.pref_src = pref_src;
-
-		_LOGD ("route: adding or updating IPv4 route: %s", nm_platform_ip4_route_to_string (&route, NULL, 0));
-	}
-	return klass->ip4_route_add (self, ifindex, source, network, plen, gateway, pref_src, metric, mss);
+	_LOGD ("route: adding or updating IPv4 route: %s", nm_platform_ip4_route_to_string (route, NULL, 0));
+	return klass->ip4_route_add (self, route);
 }
 
 gboolean
-nm_platform_ip6_route_add (NMPlatform *self,
-                           int ifindex, NMIPConfigSource source,
-                           struct in6_addr network, guint8 plen, struct in6_addr gateway,
-                           guint32 metric, guint32 mss)
+nm_platform_ip6_route_add (NMPlatform *self, const NMPlatformIP6Route *route)
 {
 	_CHECK_SELF (self, klass, FALSE);
 
-	g_return_val_if_fail (plen <= 128, FALSE);
+	g_return_val_if_fail (route, FALSE);
+	g_return_val_if_fail (route->plen <= 128, FALSE);
 
-	if (_LOGD_ENABLED ()) {
-		NMPlatformIP6Route route = { 0 };
-
-		route.ifindex = ifindex;
-		route.rt_source = source;
-		route.network = network;
-		route.plen = plen;
-		route.gateway = gateway;
-		route.metric = metric;
-		route.mss = mss;
-
-		_LOGD ("route: adding or updating IPv6 route: %s", nm_platform_ip6_route_to_string (&route, NULL, 0));
-	}
-	return klass->ip6_route_add (self, ifindex, source, network, plen, gateway, metric, mss);
+	_LOGD ("route: adding or updating IPv6 route: %s", nm_platform_ip6_route_to_string (route, NULL, 0));
+	return klass->ip6_route_add (self, route);
 }
 
 gboolean
-nm_platform_ip4_route_delete (NMPlatform *self, int ifindex, in_addr_t network, guint8 plen, guint32 metric)
+nm_platform_ip4_route_delete (NMPlatform *self, const NMPlatformIP4Route *route)
 {
-	char str_dev[TO_STRING_DEV_BUF_SIZE];
-
 	_CHECK_SELF (self, klass, FALSE);
 
-	_LOGD ("route: deleting IPv4 route %s/%d, metric=%"G_GUINT32_FORMAT", ifindex %d%s",
-	       nm_utils_inet4_ntop (network, NULL), plen, metric, ifindex,
-	       _to_string_dev (self, ifindex, str_dev, sizeof (str_dev)));
-	return klass->ip4_route_delete (self, ifindex, network, plen, metric);
+	g_return_val_if_fail (route, FALSE);
+
+	_LOGD ("route: deleting IPv4 route %s", nm_platform_ip4_route_to_string (route, NULL, 0));
+	return klass->ip4_route_delete (self, route);
 }
 
 gboolean
-nm_platform_ip6_route_delete (NMPlatform *self, int ifindex, struct in6_addr network, guint8 plen, guint32 metric)
+nm_platform_ip6_route_delete (NMPlatform *self, const NMPlatformIP6Route *route)
 {
-	char str_dev[TO_STRING_DEV_BUF_SIZE];
-
 	_CHECK_SELF (self, klass, FALSE);
 
-	_LOGD ("route: deleting IPv6 route %s/%d, metric=%"G_GUINT32_FORMAT", ifindex %d%s",
-	       nm_utils_inet6_ntop (&network, NULL), plen, metric, ifindex,
-	       _to_string_dev (self, ifindex, str_dev, sizeof (str_dev)));
-	return klass->ip6_route_delete (self, ifindex, network, plen, metric);
+	g_return_val_if_fail (route, FALSE);
+
+	_LOGD ("route: deleting IPv6 route %s", nm_platform_ip6_route_to_string (route, NULL, 0));
+	return klass->ip6_route_delete (self, route);
 }
 
 const NMPlatformIP4Route *
-nm_platform_ip4_route_get (NMPlatform *self, int ifindex, in_addr_t network, guint8 plen, guint32 metric)
+nm_platform_ip4_route_get (NMPlatform *self, const NMPlatformIP4Route *route)
 {
 	_CHECK_SELF (self, klass, FALSE);
 
-	return klass->ip4_route_get (self ,ifindex, network, plen, metric);
+	g_return_val_if_fail (route, NULL);
+
+	return klass->ip4_route_get (self, route);
 }
 
 const NMPlatformIP6Route *
-nm_platform_ip6_route_get (NMPlatform *self, int ifindex, struct in6_addr network, guint8 plen, guint32 metric)
+nm_platform_ip6_route_get (NMPlatform *self, const NMPlatformIP6Route *route)
 {
 	_CHECK_SELF (self, klass, FALSE);
 
-	return klass->ip6_route_get (self, ifindex, network, plen, metric);
+	g_return_val_if_fail (route, NULL);
+
+	return klass->ip6_route_get (self, route);
 }
 
 /******************************************************************/
@@ -3626,6 +3589,8 @@ nm_platform_ip4_route_to_string (const NMPlatformIP4Route *route, char *buf, gsi
 	char s_pref_src[INET_ADDRSTRLEN];
 	char str_dev[TO_STRING_DEV_BUF_SIZE];
 	char str_scope[30], s_source[50];
+	guint8 scope;
+	gboolean scope_print;
 
 	if (!nm_utils_to_string_buffer_init_null (route, &buf, &len))
 		return buf;
@@ -3634,6 +3599,9 @@ nm_platform_ip4_route_to_string (const NMPlatformIP4Route *route, char *buf, gsi
 	inet_ntop (AF_INET, &route->gateway, s_gateway, sizeof(s_gateway));
 
 	_to_string_dev (NULL, route->ifindex, str_dev, sizeof (str_dev));
+
+	scope = nm_platform_route_scope_from_ip4_route (route);
+	scope_print = route->rt_scope_is_set || scope != RT_SCOPE_NOWHERE;
 
 	g_snprintf (buf, len,
 	            "%s/%d"
@@ -3654,8 +3622,8 @@ nm_platform_ip4_route_to_string (const NMPlatformIP4Route *route, char *buf, gsi
 	            route->mss,
 	            nmp_utils_ip_config_source_to_string (route->rt_source, s_source, sizeof (s_source)),
 	            route->rt_cloned ? " cloned" : "",
-	            route->scope_inv ? " scope " : "",
-	            route->scope_inv ? (nm_platform_route_scope2str (nm_platform_route_scope_inv (route->scope_inv), str_scope, sizeof (str_scope))) : "",
+	            scope_print ? " scope " : "",
+	            scope_print ? nm_platform_route_scope2str (scope, str_scope, sizeof (str_scope)) : "",
 	            route->pref_src ? " pref-src " : "",
 	            route->pref_src ? inet_ntop (AF_INET, &route->pref_src, s_pref_src, sizeof(s_pref_src)) : "");
 	return buf;
@@ -3960,33 +3928,254 @@ nm_platform_ip6_address_cmp (const NMPlatformIP6Address *a, const NMPlatformIP6A
 int
 nm_platform_ip4_route_cmp (const NMPlatformIP4Route *a, const NMPlatformIP4Route *b)
 {
+	return nm_platform_ip4_route_cmp_full (a, b, NM_PLATFORM_IP_ROUTE_ID_TYPE_ALL);
+}
+
+int
+nm_platform_ip4_route_cmp_full (const NMPlatformIP4Route *a, const NMPlatformIP4Route *b, NMPlatformIPRouteIdType id_type)
+{
+	guint8 rtprot_a, rtprot_b;
+	guint8 scope_a, scope_b;
+	guint32 network_a, network_b;
+
 	_CMP_SELF (a, b);
+
 	_CMP_FIELD (a, b, ifindex);
-	_CMP_FIELD (a, b, network);
+
+	network_a = nm_utils_ip4_address_clear_host_address (a->network, a->plen);
+	network_b = nm_utils_ip4_address_clear_host_address (b->network, b->plen);
+	_CMP_DIRECT (network_a, network_b);
+
 	_CMP_FIELD (a, b, plen);
 	_CMP_FIELD (a, b, metric);
 	_CMP_FIELD (a, b, gateway);
-	_CMP_FIELD (a, b, rt_source);
+
+	rtprot_a = nmp_utils_ip_config_source_coerce_to_rtprot (a->rt_source);
+	rtprot_b = nmp_utils_ip_config_source_coerce_to_rtprot (b->rt_source);
+	_CMP_DIRECT (rtprot_a, rtprot_b);
+
 	_CMP_FIELD (a, b, mss);
-	_CMP_FIELD (a, b, scope_inv);
+
+	scope_a = nm_platform_route_scope_from_ip4_route (a);
+	scope_b = nm_platform_route_scope_from_ip4_route (b);
+	_CMP_DIRECT (scope_a, scope_b);
+
 	_CMP_FIELD (a, b, pref_src);
 	_CMP_FIELD (a, b, rt_cloned);
+
+	/* currently we have two id-types, ID and ALL. Let ALL be a stricter
+	 * ordering then ID, but yield the same order. Thus, above we first check
+	 * all the ID fields, only if those are all equal, dig deeper. */
+	switch (id_type) {
+	case NM_PLATFORM_IP_ROUTE_ID_TYPE_ID:
+		break;
+	default:
+		_CMP_FIELD (a, b, network);
+		_CMP_FIELD (a, b, rt_source);
+		_CMP_FIELD (a, b, rt_scope);
+		_CMP_FIELD (a, b, rt_scope_is_set);
+		break;
+	}
 	return 0;
+}
+
+guint
+nm_platform_ip4_route_hash_full (const NMPlatformIP4Route *a, NMPlatformIPRouteIdType id_type)
+{
+	guint h = 0x8202baf9;
+
+	if (!a)
+		return h;
+
+	h += (h * 33) + ((guint) a->ifindex);
+
+	switch (id_type) {
+	case NM_PLATFORM_IP_ROUTE_ID_TYPE_ID:
+		h += (h * 33) + ((guint) nm_utils_ip4_address_clear_host_address (a->network, a->plen));
+		break;
+	default:
+		h += (h * 33) + ((guint) a->network);
+		break;
+	}
+
+	h += (h * 33) + ((guint) a->plen);
+	h += (h * 33) + ((guint) a->metric);
+	h += (h * 33) + ((guint) a->gateway);
+
+	switch (id_type) {
+	case NM_PLATFORM_IP_ROUTE_ID_TYPE_ID:
+		h += (h * 33) + ((guint) nmp_utils_ip_config_source_coerce_to_rtprot (a->rt_source));
+		break;
+	default:
+		h += (h * 33) + ((guint) a->rt_source);
+		break;
+	}
+
+	h += (h * 33) + ((guint) a->mss);
+
+	switch (id_type) {
+	case NM_PLATFORM_IP_ROUTE_ID_TYPE_ID:
+		h += (h * 33) + ((guint) nm_platform_route_scope_from_ip4_route (a));
+		break;
+	default:
+		h += (h * 33) + (((guint) a->rt_scope) + (((guint) a->rt_scope_is_set) << 8));
+		break;
+	}
+
+	h += (h * 33) + ((guint) a->pref_src);
+	h += (h * 33) + ((guint) a->rt_cloned);
+
+	return h;
+}
+
+NMPlatformIP4Route *
+nm_platform_ip4_route_normalize (NMPlatformIP4Route *dst, const NMPlatformIP4Route *src, NMPlatformIPRouteIdType id_type)
+{
+	nm_assert (dst);
+
+	if (src && src != dst)
+		*dst = *src;
+
+	switch (id_type) {
+	case NM_PLATFORM_IP_ROUTE_ID_TYPE_ID:
+		dst->network = nm_utils_ip4_address_clear_host_address (dst->network, dst->plen);
+		dst->rt_source = nmp_utils_ip_config_source_round_trip_rtprot (dst->rt_source);
+		dst->rt_scope = nm_platform_route_scope_from_ip4_route (dst);
+		dst->rt_scope_is_set = TRUE;
+		break;
+	default:
+		break;
+	}
+	return dst;
 }
 
 int
 nm_platform_ip6_route_cmp (const NMPlatformIP6Route *a, const NMPlatformIP6Route *b)
 {
+	return nm_platform_ip6_route_cmp_full (a, b, NM_PLATFORM_IP_ROUTE_ID_TYPE_ALL);
+}
+
+int
+nm_platform_ip6_route_cmp_full (const NMPlatformIP6Route *a, const NMPlatformIP6Route *b, NMPlatformIPRouteIdType id_type)
+{
+	struct in6_addr network_a, network_b;
+	guint32 metric_a, metric_b;
+	guint8 rtprot_a, rtprot_b;
+
 	_CMP_SELF (a, b);
+
 	_CMP_FIELD (a, b, ifindex);
-	_CMP_FIELD_MEMCMP (a, b, network);
+
+	nm_utils_ip6_address_clear_host_address (&network_a, &a->network, a->plen);
+	nm_utils_ip6_address_clear_host_address (&network_b, &b->network, b->plen);
+	_CMP_DIRECT_MEMCMP (&network_a, &network_b, sizeof (struct in6_addr));
+
 	_CMP_FIELD (a, b, plen);
-	_CMP_FIELD (a, b, metric);
+
+	metric_a = nm_utils_ip6_route_metric_normalize (a->metric);
+	metric_b = nm_utils_ip6_route_metric_normalize (b->metric);
+	_CMP_DIRECT (metric_a, metric_b);
+
 	_CMP_FIELD_MEMCMP (a, b, gateway);
-	_CMP_FIELD (a, b, rt_source);
+
+	rtprot_a = nmp_utils_ip_config_source_coerce_to_rtprot (a->rt_source);
+	rtprot_b = nmp_utils_ip_config_source_coerce_to_rtprot (b->rt_source);
+	_CMP_DIRECT (rtprot_a, rtprot_b);
+
 	_CMP_FIELD (a, b, mss);
 	_CMP_FIELD (a, b, rt_cloned);
+
+	/* currently we have two id-types, ID and ALL. Let ALL be a stricter
+	 * ordering then ID, but yield the same order. Thus, above we first check
+	 * all the ID fields, only if those are all equal, dig deeper. */
+	switch (id_type) {
+	case NM_PLATFORM_IP_ROUTE_ID_TYPE_ID:
+		break;
+	default:
+		_CMP_FIELD_MEMCMP (a, b, network);
+		_CMP_FIELD (a, b, metric);
+		_CMP_FIELD (a, b, rt_source);
+		break;
+	}
 	return 0;
+}
+
+guint
+nm_platform_ip6_route_hash_full (const NMPlatformIP6Route *a, NMPlatformIPRouteIdType id_type)
+{
+	struct in6_addr network;
+
+	guint h = 0x0569b8f4;
+
+	if (!a)
+		return h;
+
+	h += (h * 33) + ((guint) a->ifindex);
+
+	switch (id_type) {
+	case NM_PLATFORM_IP_ROUTE_ID_TYPE_ID:
+		nm_utils_ip6_address_clear_host_address (&network, &a->network, a->plen);
+		h += (h * 33) + ((guint) network.s6_addr32[0]);
+		h += (h * 33) + ((guint) network.s6_addr32[1]);
+		h += (h * 33) + ((guint) network.s6_addr32[2]);
+		h += (h * 33) + ((guint) network.s6_addr32[3]);
+		break;
+	default:
+		h += (h * 33) + ((guint) a->network.s6_addr32[0]);
+		h += (h * 33) + ((guint) a->network.s6_addr32[1]);
+		h += (h * 33) + ((guint) a->network.s6_addr32[2]);
+		h += (h * 33) + ((guint) a->network.s6_addr32[3]);
+		break;
+	}
+
+	h += (h * 33) + ((guint) a->plen);
+
+	switch (id_type) {
+	case NM_PLATFORM_IP_ROUTE_ID_TYPE_ID:
+		h += (h * 33) + ((guint) nm_utils_ip6_route_metric_normalize (a->metric));
+		break;
+	default:
+		h += (h * 33) + ((guint) a->metric);
+		break;
+	}
+
+	h += (h * 33) + ((guint) a->gateway.s6_addr32[0]);
+	h += (h * 33) + ((guint) a->gateway.s6_addr32[1]);
+	h += (h * 33) + ((guint) a->gateway.s6_addr32[2]);
+	h += (h * 33) + ((guint) a->gateway.s6_addr32[3]);
+
+	switch (id_type) {
+	case NM_PLATFORM_IP_ROUTE_ID_TYPE_ID:
+		h += (h * 33) + ((guint) nmp_utils_ip_config_source_coerce_to_rtprot (a->rt_source));
+		break;
+	default:
+		h += (h * 33) + ((guint) a->rt_source);
+		break;
+	}
+
+	h += (h * 33) + ((guint) a->mss);
+	h += (h * 33) + ((guint) a->rt_cloned);
+	return h;
+}
+
+NMPlatformIP6Route *
+nm_platform_ip6_route_normalize (NMPlatformIP6Route *dst, const NMPlatformIP6Route *src, NMPlatformIPRouteIdType id_type)
+{
+	nm_assert (dst);
+
+	if (src && src != dst)
+		*dst = *src;
+
+	switch (id_type) {
+	case NM_PLATFORM_IP_ROUTE_ID_TYPE_ID:
+		nm_utils_ip6_address_clear_host_address (&dst->network, &dst->network, dst->plen);
+		dst->rt_source = nmp_utils_ip_config_source_round_trip_rtprot (dst->rt_source);
+		dst->metric = nm_utils_ip6_route_metric_normalize (dst->metric);
+		break;
+	default:
+		break;
+	}
+	return dst;
 }
 
 /**
@@ -4114,68 +4303,51 @@ nm_platform_netns_push (NMPlatform *platform, NMPNetns **netns)
 /******************************************************************/
 
 static gboolean
-_vtr_v4_route_add (NMPlatform *self, int ifindex, const NMPlatformIPXRoute *route, gint64 metric)
+_vtr_v4_route_add (NMPlatform *self, const NMPlatformIPXRoute *route, int ifindex, gint64 metric)
 {
-	return nm_platform_ip4_route_add (self,
-	                                  ifindex > 0 ? ifindex : route->rx.ifindex,
-	                                  route->rx.rt_source,
-	                                  route->r4.network,
-	                                  route->rx.plen,
-	                                  route->r4.gateway,
-	                                  route->r4.pref_src,
-	                                  metric >= 0 ? (guint32) metric : route->rx.metric,
-	                                  route->rx.mss);
+	NMPlatformIPXRoute r_storage;
+
+	if (   (ifindex > 0 && ifindex != route->rx.ifindex)
+	    || (metric >= 0 && metric != route->rx.metric)) {
+		r_storage.r4 = route->r4;
+		r_storage.rx.ifindex = ifindex;
+		r_storage.rx.metric = metric;
+		route = &r_storage;
+	}
+	return nm_platform_ip4_route_add (self, &route->r4);
 }
 
 static gboolean
-_vtr_v6_route_add (NMPlatform *self, int ifindex, const NMPlatformIPXRoute *route, gint64 metric)
+_vtr_v6_route_add (NMPlatform *self, const NMPlatformIPXRoute *route, int ifindex, gint64 metric)
 {
-	return nm_platform_ip6_route_add (self,
-	                                  ifindex > 0 ? ifindex : route->rx.ifindex,
-	                                  route->rx.rt_source,
-	                                  route->r6.network,
-	                                  route->rx.plen,
-	                                  route->r6.gateway,
-	                                  metric >= 0 ? (guint32) metric : route->rx.metric,
-	                                  route->rx.mss);
+	NMPlatformIPXRoute r_storage;
+
+	if (   (ifindex > 0 && ifindex != route->rx.ifindex)
+	    || (metric >= 0 && metric != route->rx.metric)) {
+		r_storage.r6 = route->r6;
+		r_storage.rx.ifindex = ifindex;
+		r_storage.rx.metric = nm_utils_ip6_route_metric_normalize (metric);
+		route = &r_storage;
+	}
+	return nm_platform_ip6_route_add (self, &route->r6);
 }
 
 static gboolean
-_vtr_v4_route_delete (NMPlatform *self, int ifindex, const NMPlatformIPXRoute *route)
+_vtr_v4_route_delete (NMPlatform *self, const NMPlatformIPXRoute *route)
 {
-	return nm_platform_ip4_route_delete (self,
-	                                     ifindex > 0 ? ifindex : route->rx.ifindex,
-	                                     route->r4.network,
-	                                     route->rx.plen,
-	                                     route->rx.metric);
+	return nm_platform_ip4_route_delete (self, &route->r4);
 }
 
 static gboolean
-_vtr_v6_route_delete (NMPlatform *self, int ifindex, const NMPlatformIPXRoute *route)
+_vtr_v6_route_delete (NMPlatform *self, const NMPlatformIPXRoute *route)
 {
-	return nm_platform_ip6_route_delete (self,
-	                                     ifindex > 0 ? ifindex : route->rx.ifindex,
-	                                     route->r6.network,
-	                                     route->rx.plen,
-	                                     route->rx.metric);
+	return nm_platform_ip6_route_delete (self, &route->r6);
 }
 
 static guint32
 _vtr_v4_metric_normalize (guint32 metric)
 {
 	return metric;
-}
-
-static gboolean
-_vtr_v4_route_delete_default (NMPlatform *self, int ifindex, guint32 metric)
-{
-	return nm_platform_ip4_route_delete (self, ifindex, 0, 0, metric);
-}
-
-static gboolean
-_vtr_v6_route_delete_default (NMPlatform *self, int ifindex, guint32 metric)
-{
-	return nm_platform_ip6_route_delete (self, ifindex, in6addr_any, 0, metric);
 }
 
 /******************************************************************/
@@ -4189,7 +4361,6 @@ const NMPlatformVTableRoute nm_platform_vtable_route_v4 = {
 	.route_get_all                  = nm_platform_ip4_route_get_all,
 	.route_add                      = _vtr_v4_route_add,
 	.route_delete                   = _vtr_v4_route_delete,
-	.route_delete_default           = _vtr_v4_route_delete_default,
 	.metric_normalize               = _vtr_v4_metric_normalize,
 };
 
@@ -4202,7 +4373,6 @@ const NMPlatformVTableRoute nm_platform_vtable_route_v6 = {
 	.route_get_all                  = nm_platform_ip6_route_get_all,
 	.route_add                      = _vtr_v6_route_add,
 	.route_delete                   = _vtr_v6_route_delete,
-	.route_delete_default           = _vtr_v6_route_delete_default,
 	.metric_normalize               = nm_utils_ip6_route_metric_normalize,
 };
 

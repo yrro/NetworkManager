@@ -69,8 +69,8 @@ typedef struct {
 	GArray *links;
 	GArray *ip4_addresses;
 	GArray *ip6_addresses;
-	GArray *ip4_routes;
-	GArray *ip6_routes;
+	GPtrArray *ip4_routes;
+	GPtrArray *ip6_routes;
 } NMFakePlatformPrivate;
 
 typedef struct {
@@ -105,6 +105,37 @@ static gboolean
 _ip4_address_equal_peer_net (in_addr_t peer1, in_addr_t peer2, guint8 plen)
 {
 	return ((peer1 ^ peer2) & nm_utils_ip4_prefix_to_netmask (plen)) == 0;
+}
+
+/******************************************************************/
+
+static NMPObject *
+_get_at_idx (GPtrArray *array, gsize idx, NMPObjectType expected_type)
+{
+	NMPObject *obj;
+
+	g_assert (array);
+	g_assert (idx < array->len);
+
+	obj = array->pdata[idx];
+
+	g_assert (NMP_OBJECT_IS_VALID (obj));
+	if (expected_type != NMP_OBJECT_TYPE_UNKNOWN)
+		g_assert (expected_type == NMP_OBJECT_GET_TYPE (obj));
+
+	return obj;
+}
+
+static NMPlatformIP4Route *
+_get_at_idx_ip4_route (GPtrArray *array, gsize idx)
+{
+	return &(_get_at_idx (array, idx, NMP_OBJECT_TYPE_IP4_ROUTE))->ip4_route;
+}
+
+static NMPlatformIP6Route *
+_get_at_idx_ip6_route (GPtrArray *array, gsize idx)
+{
+	return &(_get_at_idx (array, idx, NMP_OBJECT_TYPE_IP6_ROUTE))->ip6_route;
 }
 
 /******************************************************************/
@@ -352,13 +383,13 @@ link_delete (NMPlatform *platform, int ifindex)
 			memset (address, 0, sizeof (*address));
 	}
 	for (i = 0; i < priv->ip4_routes->len; i++) {
-		NMPlatformIP4Route *route = &g_array_index (priv->ip4_routes, NMPlatformIP4Route, i);
+		NMPlatformIP4Route *route = _get_at_idx_ip4_route (priv->ip4_routes, i);
 
 		if (route->ifindex == ifindex)
 			memset (route, 0, sizeof (*route));
 	}
 	for (i = 0; i < priv->ip6_routes->len; i++) {
-		NMPlatformIP6Route *route = &g_array_index (priv->ip6_routes, NMPlatformIP6Route, i);
+		NMPlatformIP6Route *route = _get_at_idx_ip6_route (priv->ip6_routes, i);
 
 		if (route->ifindex == ifindex)
 			memset (route, 0, sizeof (*route));
@@ -1098,7 +1129,7 @@ ip4_route_get_all (NMPlatform *platform, int ifindex, NMPlatformGetRouteFlags fl
 
 	/* Fill routes */
 	for (i = 0; i < priv->ip4_routes->len; i++) {
-		route = &g_array_index (priv->ip4_routes, NMPlatformIP4Route, i);
+		route = _get_at_idx_ip4_route (priv->ip4_routes, i);
 		if (route && (!ifindex || route->ifindex == ifindex)) {
 			if (NM_PLATFORM_IP_ROUTE_IS_DEFAULT (route)) {
 				if (NM_FLAGS_HAS (flags, NM_PLATFORM_GET_ROUTE_FLAGS_WITH_DEFAULT))
@@ -1128,7 +1159,7 @@ ip6_route_get_all (NMPlatform *platform, int ifindex, NMPlatformGetRouteFlags fl
 
 	/* Fill routes */
 	for (i = 0; i < priv->ip6_routes->len; i++) {
-		route = &g_array_index (priv->ip6_routes, NMPlatformIP6Route, i);
+		route = _get_at_idx_ip6_route (priv->ip6_routes, i);
 		if (route && (!ifindex || route->ifindex == ifindex)) {
 			if (NM_PLATFORM_IP_ROUTE_IS_DEFAULT (route)) {
 				if (NM_FLAGS_HAS (flags, NM_PLATFORM_GET_ROUTE_FLAGS_WITH_DEFAULT))
@@ -1144,224 +1175,191 @@ ip6_route_get_all (NMPlatform *platform, int ifindex, NMPlatformGetRouteFlags fl
 }
 
 static gboolean
-ip4_route_delete (NMPlatform *platform, int ifindex, in_addr_t network, guint8 plen, guint32 metric)
+ip4_route_delete (NMPlatform *platform, const NMPlatformIP4Route *route)
 {
 	NMFakePlatformPrivate *priv = NM_FAKE_PLATFORM_GET_PRIVATE (platform);
-	int i;
+	NMPObject obj, o;
+	NMPlatformIP4Route *r;
+	guint i;
+
+	nmp_object_stackinit_id_ip4_route (&obj, route, NM_PLATFORM_IP_ROUTE_ID_TYPE_ALL);
 
 	for (i = 0; i < priv->ip4_routes->len; i++) {
-		NMPlatformIP4Route *route = &g_array_index (priv->ip4_routes, NMPlatformIP4Route, i);
-		NMPlatformIP4Route deleted_route;
+		r = _get_at_idx_ip4_route (priv->ip4_routes, i);
 
-		if (   route->ifindex != ifindex
-		    || route->network != network
-		    || route->plen != plen
-		    || route->metric != metric)
+		nmp_object_stackinit_id_ip4_route (&o, r, NM_PLATFORM_IP_ROUTE_ID_TYPE_ALL);
+		if (!nmp_object_id_equal (&obj, &o))
 			continue;
 
-		memcpy (&deleted_route, route, sizeof (deleted_route));
-		g_array_remove_index (priv->ip4_routes, i);
-		g_signal_emit_by_name (platform, NM_PLATFORM_SIGNAL_IP4_ROUTE_CHANGED, NMP_OBJECT_TYPE_IP4_ROUTE, ifindex, &deleted_route, NM_PLATFORM_SIGNAL_REMOVED);
+		g_ptr_array_remove_index (priv->ip4_routes, i);
+		g_signal_emit_by_name (platform, NM_PLATFORM_SIGNAL_IP4_ROUTE_CHANGED, NMP_OBJECT_TYPE_IP4_ROUTE, obj.ip_route.ifindex, &obj.ip4_route, NM_PLATFORM_SIGNAL_REMOVED);
 	}
 
 	return TRUE;
 }
 
 static gboolean
-ip6_route_delete (NMPlatform *platform, int ifindex, struct in6_addr network, guint8 plen, guint32 metric)
+ip6_route_delete (NMPlatform *platform, const NMPlatformIP6Route *route)
 {
 	NMFakePlatformPrivate *priv = NM_FAKE_PLATFORM_GET_PRIVATE (platform);
-	int i;
+	NMPObject obj, o;
+	NMPlatformIP6Route *r;
+	guint i;
 
-	metric = nm_utils_ip6_route_metric_normalize (metric);
+	nmp_object_stackinit_id_ip6_route (&obj, route, NM_PLATFORM_IP_ROUTE_ID_TYPE_ALL);
 
 	for (i = 0; i < priv->ip6_routes->len; i++) {
-		NMPlatformIP6Route *route = &g_array_index (priv->ip6_routes, NMPlatformIP6Route, i);
-		NMPlatformIP6Route deleted_route;
+		r = _get_at_idx_ip6_route (priv->ip6_routes, i);
 
-		if (   route->ifindex != ifindex
-		    || !IN6_ARE_ADDR_EQUAL (&route->network, &network)
-		    || route->plen != plen
-		    || route->metric != metric)
+		nmp_object_stackinit_id_ip6_route (&o, r, NM_PLATFORM_IP_ROUTE_ID_TYPE_ALL);
+		if (!nmp_object_id_equal (&obj, &o))
 			continue;
 
-		memcpy (&deleted_route, route, sizeof (deleted_route));
-		g_array_remove_index (priv->ip6_routes, i);
-		g_signal_emit_by_name (platform, NM_PLATFORM_SIGNAL_IP6_ROUTE_CHANGED, NMP_OBJECT_TYPE_IP6_ROUTE, ifindex, &deleted_route, NM_PLATFORM_SIGNAL_REMOVED);
+		g_ptr_array_remove_index (priv->ip6_routes, i);
+		g_signal_emit_by_name (platform, NM_PLATFORM_SIGNAL_IP6_ROUTE_CHANGED, NMP_OBJECT_TYPE_IP6_ROUTE, obj.ip_route.ifindex, &obj.ip6_route, NM_PLATFORM_SIGNAL_REMOVED);
 	}
 
 	return TRUE;
 }
 
 static gboolean
-ip4_route_add (NMPlatform *platform, int ifindex, NMIPConfigSource source,
-               in_addr_t network, guint8 plen, in_addr_t gateway,
-               in_addr_t pref_src, guint32 metric, guint32 mss)
+ip4_route_add (NMPlatform *platform, const NMPlatformIP4Route *route)
 {
 	NMFakePlatformPrivate *priv = NM_FAKE_PLATFORM_GET_PRIVATE (platform);
-	NMPlatformIP4Route route;
+	NMPObject obj, o;
+	NMPlatformIP4Route *r;
 	guint i;
-	guint8 scope;
+	NMPlatformSignalChangeType change_type = NM_PLATFORM_SIGNAL_CHANGED;
 
-	g_assert (plen <= 32);
+	g_assert (route && route->plen <= 32);
 
-	scope = gateway == 0 ? RT_SCOPE_LINK : RT_SCOPE_UNIVERSE;
+	nmp_object_stackinit_id_ip4_route (&obj, route, NM_PLATFORM_IP_ROUTE_ID_TYPE_ID);
 
-	memset (&route, 0, sizeof (route));
-	route.ifindex = ifindex;
-	route.rt_source = nmp_utils_ip_config_source_round_trip_rtprot (source);
-	route.network = nm_utils_ip4_address_clear_host_address (network, plen);
-	route.plen = plen;
-	route.gateway = gateway;
-	route.metric = metric;
-	route.mss = mss;
-	route.scope_inv = nm_platform_route_scope_inv (scope);
-
-	if (gateway) {
+	if (obj.ip4_route.gateway) {
 		for (i = 0; i < priv->ip4_routes->len; i++) {
-			NMPlatformIP4Route *item = &g_array_index (priv->ip4_routes,
-			                                           NMPlatformIP4Route, i);
-			guint32 gate = ntohl (item->network) >> (32 - item->plen);
-			guint32 host = ntohl (gateway) >> (32 - item->plen);
+			guint32 gate, host;
 
-			if (ifindex == item->ifindex && gate == host)
+			r = _get_at_idx_ip4_route (priv->ip4_routes, i);
+
+			gate = ntohl (r->network) >> (32 - r->plen);
+			host = ntohl (obj.ip4_route.gateway) >> (32 - r->plen);
+
+			if (obj.ip_route.ifindex == r->ifindex && gate == host)
 				break;
 		}
 		if (i == priv->ip4_routes->len) {
-			nm_log_warn (LOGD_PLATFORM, "Fake platform: failure adding ip4-route '%d: %s/%d %d': Network Unreachable",
-			             route.ifindex, nm_utils_inet4_ntop (route.network, NULL), route.plen, route.metric);
+			nm_log_warn (LOGD_PLATFORM, "Fake platform: failure adding ip4-route '%s': Network Unreachable",
+			             nm_platform_ip4_route_to_string (route, NULL, 0));
 			return FALSE;
 		}
 	}
 
 	for (i = 0; i < priv->ip4_routes->len; i++) {
-		NMPlatformIP4Route *item = &g_array_index (priv->ip4_routes, NMPlatformIP4Route, i);
+		r = _get_at_idx_ip4_route (priv->ip4_routes, i);
 
-		if (item->network != route.network)
-			continue;
-		if (item->plen != route.plen)
-			continue;
-		if (item->metric != metric)
+		nmp_object_stackinit_id_ip4_route (&o, r, NM_PLATFORM_IP_ROUTE_ID_TYPE_ALL);
+		if (!nmp_object_id_equal (&obj, &o))
 			continue;
 
-		if (item->ifindex != route.ifindex) {
-			ip4_route_delete (platform, item->ifindex, item->network, item->plen, item->metric);
-			i--;
-			continue;
-		}
-
-		memcpy (item, &route, sizeof (route));
-		g_signal_emit_by_name (platform, NM_PLATFORM_SIGNAL_IP4_ROUTE_CHANGED, NMP_OBJECT_TYPE_IP4_ROUTE, ifindex, &route, NM_PLATFORM_SIGNAL_CHANGED);
-		return TRUE;
+		*r = obj.ip4_route;
+		goto out;
 	}
 
-	g_array_append_val (priv->ip4_routes, route);
-	g_signal_emit_by_name (platform, NM_PLATFORM_SIGNAL_IP4_ROUTE_CHANGED, NMP_OBJECT_TYPE_IP4_ROUTE, ifindex, &route, NM_PLATFORM_SIGNAL_ADDED);
-
+	g_ptr_array_add (priv->ip4_routes, nmp_object_new (NMP_OBJECT_TYPE_IP4_ROUTE, &obj.object));
+	r = _get_at_idx_ip4_route (priv->ip4_routes, priv->ip4_routes->len - 1);
+	change_type = NM_PLATFORM_SIGNAL_ADDED;
+out:
+	g_signal_emit_by_name (platform, NM_PLATFORM_SIGNAL_IP4_ROUTE_CHANGED, NMP_OBJECT_TYPE_IP4_ROUTE, r->ifindex, r, change_type);
 	return TRUE;
 }
 
 static gboolean
-ip6_route_add (NMPlatform *platform, int ifindex, NMIPConfigSource source,
-               struct in6_addr network, guint8 plen, struct in6_addr gateway,
-               guint32 metric, guint32 mss)
+ip6_route_add (NMPlatform *platform, const NMPlatformIP6Route *route)
 {
 	NMFakePlatformPrivate *priv = NM_FAKE_PLATFORM_GET_PRIVATE (platform);
-	NMPlatformIP6Route route;
+	NMPObject obj, o;
+	NMPlatformIP6Route *r;
 	guint i;
+	NMPlatformSignalChangeType change_type = NM_PLATFORM_SIGNAL_CHANGED;
 
-	metric = nm_utils_ip6_route_metric_normalize (metric);
+	g_assert (route && route->plen <= 128);
 
-	memset (&route, 0, sizeof (route));
-	route.ifindex = ifindex;
-	route.rt_source = nmp_utils_ip_config_source_round_trip_rtprot (source);
-	nm_utils_ip6_address_clear_host_address (&route.network, &network, plen);
-	route.plen = plen;
-	route.gateway = gateway;
-	route.metric = metric;
-	route.mss = mss;
+	nmp_object_stackinit_id_ip6_route (&obj, route, NM_PLATFORM_IP_ROUTE_ID_TYPE_ID);
 
-	if (!IN6_IS_ADDR_UNSPECIFIED(&gateway)) {
+	if (!IN6_IS_ADDR_UNSPECIFIED (&obj.ip6_route.gateway)) {
 		for (i = 0; i < priv->ip6_routes->len; i++) {
-			NMPlatformIP6Route *item = &g_array_index (priv->ip6_routes,
-			                                           NMPlatformIP6Route, i);
-			guint8 gate_bits = gateway.s6_addr[item->plen / 8] >> (8 - item->plen % 8);
-			guint8 host_bits = item->network.s6_addr[item->plen / 8] >> (8 - item->plen % 8);
+			struct in6_addr a_gateway, a_network;
 
-			if (   ifindex == item->ifindex
-			    && memcmp (&gateway, &item->network, item->plen / 8) == 0
-			    && gate_bits == host_bits)
+			r = _get_at_idx_ip6_route (priv->ip6_routes, i);
+			if (obj.ip_route.ifindex != r->ifindex)
+				continue;
+
+			nm_utils_ip6_address_clear_host_address (&a_gateway, &obj.ip6_route.gateway, r->plen);
+			nm_utils_ip6_address_clear_host_address (&a_network, &r->network, r->plen);
+			if (memcmp (&a_gateway, &a_network, sizeof (struct in6_addr)) == 0)
 				break;
 		}
 		if (i == priv->ip6_routes->len) {
-			nm_log_warn (LOGD_PLATFORM, "Fake platform: failure adding ip6-route '%d: %s/%d %d': Network Unreachable",
-			             route.ifindex, nm_utils_inet6_ntop (&route.network, NULL), route.plen, route.metric);
+			nm_log_warn (LOGD_PLATFORM, "Fake platform: failure adding ip6-route '%s': Network Unreachable",
+			             nm_platform_ip6_route_to_string (route, NULL, 0));
 			return FALSE;
 		}
 	}
 
 	for (i = 0; i < priv->ip6_routes->len; i++) {
-		NMPlatformIP6Route *item = &g_array_index (priv->ip6_routes, NMPlatformIP6Route, i);
+		r = _get_at_idx_ip6_route (priv->ip6_routes, i);
 
-		if (!IN6_ARE_ADDR_EQUAL (&item->network, &route.network))
-			continue;
-		if (item->plen != route.plen)
-			continue;
-		if (item->metric != metric)
+		nmp_object_stackinit_id_ip6_route (&o, r, NM_PLATFORM_IP_ROUTE_ID_TYPE_ALL);
+		if (!nmp_object_id_equal (&obj, &o))
 			continue;
 
-		if (item->ifindex != route.ifindex) {
-			ip6_route_delete (platform, item->ifindex, item->network, item->plen, item->metric);
-			i--;
-			continue;
-		}
-
-		memcpy (item, &route, sizeof (route));
-		g_signal_emit_by_name (platform, NM_PLATFORM_SIGNAL_IP6_ROUTE_CHANGED, NMP_OBJECT_TYPE_IP6_ROUTE, ifindex, &route, NM_PLATFORM_SIGNAL_CHANGED);
-		return TRUE;
+		*r = obj.ip6_route;
+		goto out;
 	}
 
-	g_array_append_val (priv->ip6_routes, route);
-	g_signal_emit_by_name (platform, NM_PLATFORM_SIGNAL_IP6_ROUTE_CHANGED, NMP_OBJECT_TYPE_IP6_ROUTE, ifindex, &route, NM_PLATFORM_SIGNAL_ADDED);
-
+	g_ptr_array_add (priv->ip6_routes, nmp_object_new (NMP_OBJECT_TYPE_IP6_ROUTE, &obj.object));
+	r = _get_at_idx_ip6_route (priv->ip6_routes, priv->ip6_routes->len - 1);
+	change_type = NM_PLATFORM_SIGNAL_ADDED;
+out:
+	g_signal_emit_by_name (platform, NM_PLATFORM_SIGNAL_IP6_ROUTE_CHANGED, NMP_OBJECT_TYPE_IP6_ROUTE, r->ifindex, r, change_type);
 	return TRUE;
 }
 
 static const NMPlatformIP4Route *
-ip4_route_get (NMPlatform *platform, int ifindex, in_addr_t network, guint8 plen, guint32 metric)
+ip4_route_get (NMPlatform *platform, const NMPlatformIP4Route *route)
 {
 	NMFakePlatformPrivate *priv = NM_FAKE_PLATFORM_GET_PRIVATE (platform);
-	int i;
+	guint i;
+	NMPObject obj_id, o;
+
+	nmp_object_stackinit_id_ip4_route (&obj_id, route, NM_PLATFORM_IP_ROUTE_ID_TYPE_ID);
 
 	for (i = 0; i < priv->ip4_routes->len; i++) {
-		NMPlatformIP4Route *route = &g_array_index (priv->ip4_routes, NMPlatformIP4Route, i);
+		const NMPlatformIP4Route *r = _get_at_idx_ip4_route (priv->ip4_routes, i);
 
-		if (route->ifindex == ifindex
-				&& route->network == network
-				&& route->plen == plen
-				&& route->metric == metric)
-			return route;
+		nmp_object_stackinit_id_ip4_route (&o, r, NM_PLATFORM_IP_ROUTE_ID_TYPE_ALL);
+		if (nmp_object_id_equal (&obj_id, &o))
+			return r;
 	}
 
 	return NULL;
 }
 
 static const NMPlatformIP6Route *
-ip6_route_get (NMPlatform *platform, int ifindex, struct in6_addr network, guint8 plen, guint32 metric)
+ip6_route_get (NMPlatform *platform, const NMPlatformIP6Route *route)
 {
 	NMFakePlatformPrivate *priv = NM_FAKE_PLATFORM_GET_PRIVATE (platform);
-	int i;
+	guint i;
+	NMPObject obj_id, o;
 
-	metric = nm_utils_ip6_route_metric_normalize (metric);
+	nmp_object_stackinit_id_ip6_route (&obj_id, route, NM_PLATFORM_IP_ROUTE_ID_TYPE_ID);
 
 	for (i = 0; i < priv->ip6_routes->len; i++) {
-		NMPlatformIP6Route *route = &g_array_index (priv->ip6_routes, NMPlatformIP6Route, i);
+		NMPlatformIP6Route *r = _get_at_idx_ip6_route (priv->ip6_routes, i);
 
-		if (route->ifindex == ifindex
-				&& IN6_ARE_ADDR_EQUAL (&route->network, &network)
-				&& route->plen == plen
-				&& route->metric == metric)
-			return route;
+		nmp_object_stackinit_id_ip6_route (&o, r, NM_PLATFORM_IP_ROUTE_ID_TYPE_ALL);
+		if (nmp_object_id_equal (&obj_id, &o))
+			return r;
 	}
 
 	return NULL;
@@ -1378,8 +1376,8 @@ nm_fake_platform_init (NMFakePlatform *fake_platform)
 	priv->links = g_array_new (TRUE, TRUE, sizeof (NMFakePlatformLink));
 	priv->ip4_addresses = g_array_new (TRUE, TRUE, sizeof (NMPlatformIP4Address));
 	priv->ip6_addresses = g_array_new (TRUE, TRUE, sizeof (NMPlatformIP6Address));
-	priv->ip4_routes = g_array_new (TRUE, TRUE, sizeof (NMPlatformIP4Route));
-	priv->ip6_routes = g_array_new (TRUE, TRUE, sizeof (NMPlatformIP6Route));
+	priv->ip4_routes = g_ptr_array_new_with_free_func ((GDestroyNotify) nmp_object_unref);
+	priv->ip6_routes = g_ptr_array_new_with_free_func ((GDestroyNotify) nmp_object_unref);
 }
 
 void
@@ -1419,8 +1417,8 @@ nm_fake_platform_finalize (GObject *object)
 	g_array_unref (priv->links);
 	g_array_unref (priv->ip4_addresses);
 	g_array_unref (priv->ip6_addresses);
-	g_array_unref (priv->ip4_routes);
-	g_array_unref (priv->ip6_routes);
+	g_ptr_array_unref (priv->ip4_routes);
+	g_ptr_array_unref (priv->ip6_routes);
 
 	G_OBJECT_CLASS (nm_fake_platform_parent_class)->finalize (object);
 }

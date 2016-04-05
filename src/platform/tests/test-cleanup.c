@@ -33,26 +33,21 @@ test_cleanup_internal (void)
 	GArray *addresses6;
 	GArray *routes4;
 	GArray *routes6;
-	in_addr_t addr4;
-	in_addr_t network4;
 	int plen4 = 24;
-	in_addr_t gateway4;
-	struct in6_addr addr6;
-	struct in6_addr network6;
 	int plen6 = 64;
-	struct in6_addr gateway6;
 	int lifetime = NM_PLATFORM_LIFETIME_PERMANENT;
 	int preferred = NM_PLATFORM_LIFETIME_PERMANENT;
 	int metric = 20;
 	int mss = 1000;
 	guint32 flags = 0;
-
-	inet_pton (AF_INET, "192.0.2.1", &addr4);
-	inet_pton (AF_INET, "192.0.3.0", &network4);
-	inet_pton (AF_INET, "198.51.100.1", &gateway4);
-	inet_pton (AF_INET6, "2001:db8:a:b:1:2:3:4", &addr6);
-	inet_pton (AF_INET6, "2001:db8:c:d:0:0:0:0", &network6);
-	inet_pton (AF_INET6, "2001:db8:e:f:1:2:3:4", &gateway6);
+	const char *const ADDR4 = "192.0.2.1";
+	const char *const NETWORK4 = "192.0.3.0";
+	const char *const GATEWAY4 = "198.51.100.1";
+	const char *const ADDR6 = "2001:db8:a:b:1:2:3:4";
+	const char *const NETWORK6 = "2001:db8:c:d:0:0:0:0";
+	const char *const GATEWAY6 = "2001:db8:e:f:1:2:3:4";
+	const guint32 addr4 = nmtst_inet4_from_string (ADDR4);
+	const struct in6_addr addr6 = *nmtst_inet6_from_string (ADDR6);
 
 	/* Create and set up device */
 	g_assert (nm_platform_link_dummy_add (NM_PLATFORM_GET, DEVICE_NAME, NULL) == NM_PLATFORM_ERROR_SUCCESS);
@@ -65,12 +60,12 @@ test_cleanup_internal (void)
 	/* Add routes and addresses */
 	g_assert (nm_platform_ip4_address_add (NM_PLATFORM_GET, ifindex, addr4, plen4, addr4, lifetime, preferred, 0, NULL));
 	g_assert (nm_platform_ip6_address_add (NM_PLATFORM_GET, ifindex, addr6, plen6, in6addr_any, lifetime, preferred, flags));
-	g_assert (nm_platform_ip4_route_add (NM_PLATFORM_GET, ifindex, NM_IP_CONFIG_SOURCE_USER, gateway4, 32, INADDR_ANY, 0, metric, mss));
-	g_assert (nm_platform_ip4_route_add (NM_PLATFORM_GET, ifindex, NM_IP_CONFIG_SOURCE_USER, network4, plen4, gateway4, 0, metric, mss));
-	g_assert (nm_platform_ip4_route_add (NM_PLATFORM_GET, ifindex, NM_IP_CONFIG_SOURCE_USER, 0, 0, gateway4, 0, metric, mss));
-	g_assert (nm_platform_ip6_route_add (NM_PLATFORM_GET, ifindex, NM_IP_CONFIG_SOURCE_USER, gateway6, 128, in6addr_any, metric, mss));
-	g_assert (nm_platform_ip6_route_add (NM_PLATFORM_GET, ifindex, NM_IP_CONFIG_SOURCE_USER, network6, plen6, gateway6, metric, mss));
-	g_assert (nm_platform_ip6_route_add (NM_PLATFORM_GET, ifindex, NM_IP_CONFIG_SOURCE_USER, in6addr_any, 0, gateway6, metric, mss));
+	g_assert (nm_platform_ip4_route_add (NM_PLATFORM_GET, nmtst_platform_ip4_route_full (ifindex, GATEWAY4, 32, NULL, NM_IP_CONFIG_SOURCE_USER, metric, mss, 0, FALSE, NULL)));
+	g_assert (nm_platform_ip4_route_add (NM_PLATFORM_GET, nmtst_platform_ip4_route_full (ifindex, NETWORK4, plen4, GATEWAY4, NM_IP_CONFIG_SOURCE_USER, metric, mss, 0, FALSE, NULL)));
+	g_assert (nm_platform_ip4_route_add (NM_PLATFORM_GET, nmtst_platform_ip4_route_full (ifindex, NULL, 0, GATEWAY4, NM_IP_CONFIG_SOURCE_USER, metric, mss, 0, FALSE, NULL)));
+	g_assert (nm_platform_ip6_route_add (NM_PLATFORM_GET, nmtst_platform_ip6_route_full (ifindex, GATEWAY6, 128, NULL, NM_IP_CONFIG_SOURCE_USER, metric, mss)));
+	g_assert (nm_platform_ip6_route_add (NM_PLATFORM_GET, nmtst_platform_ip6_route_full (ifindex, NETWORK6, plen6, GATEWAY6, NM_IP_CONFIG_SOURCE_USER, metric, mss)));
+	g_assert (nm_platform_ip6_route_add (NM_PLATFORM_GET, nmtst_platform_ip6_route_full (ifindex, NULL, 0, GATEWAY6, NM_IP_CONFIG_SOURCE_USER, metric, mss)));
 
 	addresses4 = nm_platform_ip4_address_get_all (NM_PLATFORM_GET, ifindex);
 	addresses6 = nm_platform_ip6_address_get_all (NM_PLATFORM_GET, ifindex);

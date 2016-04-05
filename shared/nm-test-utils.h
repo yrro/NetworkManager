@@ -1177,6 +1177,13 @@ _nmtst_assert_resolve_relative_path_equals (const char *f1, const char *f2, cons
 
 #ifdef __NETWORKMANAGER_PLATFORM_H__
 
+#define nmtst_ip4_address_to_ptr(addr) \
+	({ \
+		guint32 *__addr = g_alloca (sizeof (guint32)); \
+		*__addr = (addr); \
+		(const NMIPAddr *) __addr; \
+	})
+
 inline static NMPlatformIP4Address *
 nmtst_platform_ip4_address (const char *address, const char *peer_address, guint plen)
 {
@@ -1251,7 +1258,9 @@ nmtst_platform_ip6_address_full (const char *address, const char *peer_address, 
 }
 
 inline static NMPlatformIP4Route *
-nmtst_platform_ip4_route (const char *network, guint plen, const char *gateway)
+nmtst_platform_ip4_route (const char *network,
+                          guint8 plen,
+                          const char *gateway)
 {
 	static NMPlatformIP4Route route;
 
@@ -1266,10 +1275,15 @@ nmtst_platform_ip4_route (const char *network, guint plen, const char *gateway)
 }
 
 inline static NMPlatformIP4Route *
-nmtst_platform_ip4_route_full (const char *network, guint plen, const char *gateway,
-                               int ifindex, NMIPConfigSource source,
-                               guint metric, guint mss,
+nmtst_platform_ip4_route_full (int ifindex,
+                               const char *network,
+                               guint8 plen,
+                               const char *gateway,
+                               NMIPConfigSource source,
+                               guint32 metric,
+                               guint32 mss,
                                guint8 scope,
+                               bool scope_is_set,
                                const char *pref_src)
 {
 	NMPlatformIP4Route *route = nmtst_platform_ip4_route (network, plen, gateway);
@@ -1278,14 +1292,17 @@ nmtst_platform_ip4_route_full (const char *network, guint plen, const char *gate
 	route->rt_source = source;
 	route->metric = metric;
 	route->mss = mss;
-	route->scope_inv = nm_platform_route_scope_inv (scope);
+	route->rt_scope = scope;
+	route->rt_scope_is_set = scope_is_set;
 	route->pref_src = nmtst_inet4_from_string (pref_src);
 
 	return route;
 }
 
 inline static NMPlatformIP6Route *
-nmtst_platform_ip6_route (const char *network, guint plen, const char *gateway)
+nmtst_platform_ip6_route (const char *network,
+                          guint8 plen,
+                          const char *gateway)
 {
 	static NMPlatformIP6Route route;
 
@@ -1300,9 +1317,13 @@ nmtst_platform_ip6_route (const char *network, guint plen, const char *gateway)
 }
 
 inline static NMPlatformIP6Route *
-nmtst_platform_ip6_route_full (const char *network, guint plen, const char *gateway,
-                               int ifindex, NMIPConfigSource source,
-                               guint metric, guint mss)
+nmtst_platform_ip6_route_full (int ifindex,
+                               const char *network,
+                               guint8 plen,
+                               const char *gateway,
+                               NMIPConfigSource source,
+                               guint32 metric,
+                               guint32 mss)
 {
 	NMPlatformIP6Route *route = nmtst_platform_ip6_route (network, plen, gateway);
 

@@ -2292,6 +2292,188 @@ test_netns_bind_to_path (gpointer fixture, gconstpointer test_data)
 
 /*****************************************************************************/
 
+static void
+test_route_external (gconstpointer user_data)
+{
+	const gboolean EX = (nmtst_get_rand_int () % 3) - 1;
+	const char *const MODE = user_data;
+	const char *IF[2] = { "IF0", "IF1" };
+	int ifindex[2];
+	const char *gateway[2] = {
+		"192.168.171.1",
+		"192.168.172.1",
+	};
+	gs_unref_object NMPlatform *pl = NULL;
+	int delete_idx;
+	gs_free const NMPlatformIPXRoute **routes = NULL;
+	guint routes_len;
+
+	g_object_unref (NM_PLATFORM_GET);
+
+	g_assert (NM_IN_STRSET (MODE, "change", "append"));
+
+	pl = nm_linux_platform_new (NM_PLATFORM_NETNS_SUPPORT_DEFAULT);
+
+	ifindex[0] = nmtstp_link_dummy_add (pl, EX, IF[0])->ifindex;
+	ifindex[1] = nmtstp_link_dummy_add (pl, EX, IF[1])->ifindex;
+	nmtstp_link_set_updown (pl, EX, ifindex[0], TRUE);
+	nmtstp_link_set_updown (pl, EX, ifindex[1], TRUE);
+
+	nmtstp_ip4_address_add (pl, EX, ifindex[0],
+	                        nmtst_inet4_from_string ("192.168.171.5"), 24,
+	                        nmtst_inet4_from_string ("192.168.171.5"),
+	                        NM_PLATFORM_LIFETIME_PERMANENT, NM_PLATFORM_LIFETIME_PERMANENT, 0, NULL);
+	nmtstp_ip4_address_add (pl, EX, ifindex[1],
+	                        nmtst_inet4_from_string ("192.168.172.5"), 24,
+	                        nmtst_inet4_from_string ("192.168.172.5"),
+	                        NM_PLATFORM_LIFETIME_PERMANENT, NM_PLATFORM_LIFETIME_PERMANENT, 0, NULL);
+
+#define ADDR4(addr_str) (nmtst_ip4_address_to_ptr (nmtst_inet4_from_string (addr_str)))
+
+	nmtstp_run_command_check ("ip route add 192.168.200.0/24 via %s metric 423", gateway[0]);
+	nmtstp_assert_wait_for_ip4_route (pl, ifindex[0], nmtst_inet4_from_string ("192.168.200.0"), 24,
+	                                  423, nmtst_inet4_from_string (gateway[0]), 100);
+
+	nmtstp_run_command_check ("ip route %s 192.168.200.0/24 via 192.168.172.1 metric 423", MODE);
+
+	if (NM_IN_STRSET (MODE, "changed")) {
+
+		nmtstp_assert_wait_for_ip4_route (pl, ifindex[1], nmtst_inet4_from_string ("192.168.200.0"), 24,
+		                                  423, nmtst_inet4_from_string (gateway[1]), 100);
+		/* is the route still on ifindex[0]? */
+		routes = nmtstp_ip_route_get_by_destination (pl, TRUE, ifindex[0],
+		                                             ADDR4 ("192.168.200.0"), 24, 423,
+		                                             ADDR4 (gateway[0]), NULL);
+		g_assert (!routes);
+	} else if (NM_IN_STRSET (MODE, "append")) {
+		nmtstp_assert_wait_for_ip4_route (pl, ifindex[1], nmtst_inet4_from_string ("192.168.200.0"), 24,
+		                                  423, nmtst_inet4_from_string (gateway[1]), 100);
+		/* the route on ifindex[0] should continue to exist */
+		routes = nmtstp_ip_route_get_by_destination (pl, TRUE, ifindex[0],
+		                                             ADDR4 ("192.168.200.0"), 24, 423,
+		                                             ADDR4 (gateway[0]), &routes_len);
+		g_assert (routes_len == 1);
+		g_clear_pointer (&routes, g_free);
+
+		delete_idx = nmtst_get_rand_int () % 2;
+
+		routes = nmtstp_ip_route_get_by_destination (pl, TRUE, ifindex[delete_idx],
+		                                             ADDR4 ("192.168.200.0"), 24, 423,
+		                                             ADDR4 (gateway[delete_idx]), &routes_len);
+		g_assert (routes_len == 1);
+		if (!nm_platform_ip4_route_delete (pl, &routes[0]->r4))
+			g_assert_not_reached ();
+		g_clear_pointer (&routes, g_free);
+
+		routes = nmtstp_ip_route_get_by_destination (pl, TRUE, ifindex[delete_idx],
+		                                             ADDR4 ("192.168.200.0"), 24, 423,
+		                                             ADDR4 (gateway[delete_idx]), &routes_len);
+		g_assert (!routes);
+
+		routes = nmtstp_ip_route_get_by_destination (pl, TRUE, ifindex[!delete_idx],
+		                                             ADDR4 ("192.168.200.0"), 24, 423,
+		                                             ADDR4 (gateway[!delete_idx]), &routes_len);
+		g_assert (routes_len == 1);
+		g_clear_pointer (&routes, g_free);
+	}
+
+	nmtstp_link_del (pl, EX, ifindex[0], IF[0]);
+	nmtstp_link_del (pl, EX, ifindex[1], IF[1]);
+
+	SETUP ();
+}
+
+/*****************************************************************************/
+
+static void
+test_route_modify (gconstpointer test_data)
+{
+#if 0
+	const char *const MODE = test_data;
+	const gboolean EX = (nmtst_get_rand_int () % 3) - 1;
+	const char *IF = "IF0";
+	int ifindex;
+	const char *gateway[2] = {
+		"192.168.181.1",
+		"192.168.181.2",
+	};
+	guint idx[2] = { 0, 1, };
+	guint i;
+	gs_unref_object NMPlatform *pl = NULL;
+
+	g_assert (NM_IN_STRSET (MODE, "delete", "update"));
+
+	g_object_unref (NM_PLATFORM_GET);
+
+	pl = nm_linux_platform_new (NM_PLATFORM_NETNS_SUPPORT_DEFAULT);
+
+	nmtst_rand_perm (NULL, idx, idx, sizeof (idx[0]), G_N_ELEMENTS (idx));
+
+	ifindex = nmtstp_link_dummy_add (pl, EX, IF)->ifindex;
+	nmtstp_link_set_updown (pl, EX, ifindex, TRUE);
+
+	nmtstp_ip4_address_add (pl, EX, ifindex,
+	                        nmtst_inet4_from_string ("192.168.181.5"), 24,
+	                        nmtst_inet4_from_string ("192.168.181.5"),
+	                        NM_PLATFORM_LIFETIME_PERMANENT, NM_PLATFORM_LIFETIME_PERMANENT, 0, NULL);
+
+	nmtstp_run_command_check ("ip route add 192.168.213.0/24 via %s metric 423", gateway[idx[0]]);
+	if (nmtst_get_rand_int () % 2) {
+		nmtstp_assert_wait_for_ip4_route (pl, ifindex, nmtst_inet4_from_string ("192.168.213.0"), 24,
+		                                  423, nmtst_inet4_from_string (gateway[idx[0]]), 100);
+	}
+
+	if (nmtst_get_rand_int () % 2) {
+		nmtstp_run_command_check ("ip route append 192.168.213.0/24 via %s metric 423", gateway[idx[1]]);
+		nmtstp_assert_wait_for_ip4_route (pl, ifindex, nmtst_inet4_from_string ("192.168.213.0"), 24,
+		                                  423, nmtst_inet4_from_string (gateway[idx[1]]), 100);
+	} else {
+		nmtstp_ip4_route_add (pl, EX, ifindex, NM_IP_CONFIG_SOURCE_RTPROT_BOOT,
+		                      nmtst_inet4_from_string ("192.168.213.0"), 24,
+		                      nmtst_inet4_from_string (gateway[idx[1]]), 0,
+		                      423, 0);
+	}
+
+	g_assert (nm_platform_ip4_route_get (pl, ifindex,
+	                                     nmtst_inet4_from_string ("192.168.213.0"), 24, 423,
+	                                     nmtst_inet4_from_string (gateway[idx[0]])));
+	g_assert (nm_platform_ip4_route_get (pl, ifindex,
+	                                     nmtst_inet4_from_string ("192.168.213.0"), 24, 423,
+	                                     nmtst_inet4_from_string (gateway[idx[1]])));
+
+	nmtst_rand_perm (NULL, idx, idx, sizeof (idx[0]), G_N_ELEMENTS (idx));
+
+	for (i = 0; i < G_N_ELEMENTS (idx); i++) {
+		const NMPlatformIP4Route *plroute;
+
+		if (NM_IN_STRSET (MODE, "delete")) {
+			g_assert (nm_platform_ip4_route_delete (pl, ifindex,
+			                                        nmtst_inet4_from_string ("192.168.213.0"), 24, 423,
+			                                        nmtst_inet4_from_string (gateway[idx[i]])));
+			g_assert (!nm_platform_ip4_route_get (pl, ifindex,
+			                                      nmtst_inet4_from_string ("192.168.213.0"), 24, 423,
+			                                      nmtst_inet4_from_string (gateway[idx[i]])));
+
+			plroute = nm_platform_ip4_route_get (pl, ifindex,
+			                                     nmtst_inet4_from_string ("192.168.213.0"), 24, 423,
+			                                     nmtst_inet4_from_string (gateway[idx[!i]]));
+			g_assert ((i == 0 && plroute) || (i == 1 && !plroute));
+		} else if (NM_IN_STRSET (MODE, "update")) {
+			plroute = nmtstp_ip4_route_add (pl, FALSE, ifindex, NM_IP_CONFIG_SOURCE_USER,
+			                                nmtst_inet4_from_string ("192.168.213.0"), 24,
+			                                nmtst_inet4_from_string (gateway[idx[i]]), 0,
+			                                423, 1400);
+		}
+	}
+
+	nmtstp_link_del (pl, EX, ifindex, IF);
+
+	SETUP ();
+#endif
+}
+
+/*****************************************************************************/
+
 void
 _nmtstp_init_tests (int *argc, char ***argv)
 {
@@ -2334,6 +2516,11 @@ _nmtstp_setup_tests (void)
 
 		g_test_add_data_func ("/link/create-many-links/20", GUINT_TO_POINTER (20), test_create_many_links);
 		g_test_add_data_func ("/link/create-many-links/1000", GUINT_TO_POINTER (1000), test_create_many_links);
+
+		g_test_add_data_func ("/route/external/change", "change", test_route_external);
+		g_test_add_data_func ("/route/external/append", "append", test_route_external);
+		g_test_add_data_func ("/route/modify/delete", "delete", test_route_modify);
+		g_test_add_data_func ("/route/modify/update", "update", test_route_modify);
 
 		g_test_add_func ("/link/nl-bugs/veth", test_nl_bugs_veth);
 		g_test_add_func ("/link/nl-bugs/spurious-newlink", test_nl_bugs_spuroius_newlink);

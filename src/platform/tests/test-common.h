@@ -109,6 +109,47 @@ const NMPlatformLink *nmtstp_wait_for_link_until (NMPlatform *platform, const ch
 const NMPlatformLink *nmtstp_assert_wait_for_link (NMPlatform *platform, const char *ifname, NMLinkType expected_link_type, guint timeout_ms);
 const NMPlatformLink *nmtstp_assert_wait_for_link_until (NMPlatform *platform, const char *ifname, NMLinkType expected_link_type, gint64 until_ms);
 
+const NMPlatformIP4Route *nmtstp_wait_for_ip4_route (NMPlatform *platform, int ifindex, guint32 network, guint8 plen, guint32 metric, guint32 gateway, guint timeout_ms);
+const NMPlatformIP4Route *nmtstp_wait_for_ip4_route_until (NMPlatform *platform, int ifindex, guint32 network, guint8 plen, guint32 metric, guint32 gateway, gint64 until_ms);
+const NMPlatformIP6Route *nmtstp_wait_for_ip6_route (NMPlatform *platform, int ifindex, const struct in6_addr *network, guint8 plen, guint32 metric, const struct in6_addr *gateway, guint timeout_ms);
+const NMPlatformIP6Route *nmtstp_wait_for_ip6_route_until (NMPlatform *platform, int ifindex, const struct in6_addr *network, guint8 plen, guint32 metric, const struct in6_addr *gateway, gint64 until_ms);
+
+#define nmtstp_assert_wait_for_ip4_route(platform, ifindex, network, plen, metric, gateway, timeout_ms) \
+	({ \
+		const NMPlatformIP4Route *_plroute; \
+		\
+		_plroute = nmtstp_wait_for_ip4_route (platform, ifindex, network, plen, metric, gateway, timeout_ms); \
+		g_assert (_plroute); \
+		_plroute; \
+	})
+
+#define nmtstp_assert_wait_for_ip4_route_until(platform, ifindex, network, plen, metric, gateway, until_ms) \
+	({ \
+		const NMPlatformIP4Route *_plroute; \
+		\
+		_plroute = nmtstp_wait_for_ip4_route_until (platform, ifindex, network, plen, metric, gateway, until_ms); \
+		g_assert (_plroute); \
+		_plroute; \
+	})
+
+#define nmtstp_assert_wait_for_ip6_route(platform, ifindex, network, plen, metric, gateway, timeout_ms) \
+	({ \
+		const NMPlatformIP6Route *_plroute; \
+		\
+		_plroute = nmtstp_wait_for_ip6_route (platform, ifindex, network, plen, metric, gateway, timeout_ms); \
+		g_assert (_plroute); \
+		_plroute; \
+	})
+
+#define nmtstp_assert_wait_for_ip6_route_until(platform, ifindex, network, plen, metric, gateway, until_ms) \
+	({ \
+		const NMPlatformIP6Route *_plroute; \
+		\
+		_plroute = nmtstp_wait_for_ip6_route_until (platform, ifindex, network, plen, metric, gateway, until_ms); \
+		g_assert (_plroute); \
+		_plroute; \
+	})
+
 /*****************************************************************************/
 
 int nmtstp_run_command_check_external_global (void);
@@ -116,10 +157,19 @@ gboolean nmtstp_run_command_check_external (int external_command);
 
 /*****************************************************************************/
 
-gboolean nmtstp_ip4_route_exists (const char *ifname, guint32 network, int plen, guint32 metric);
+const NMPlatformIPXRoute **nmtstp_ip_route_get_by_destination (NMPlatform *platform,
+                                                               gboolean is_v4,
+                                                               int ifindex,
+                                                               const NMIPAddr *network,
+                                                               guint8 plen,
+                                                               guint32 metric,
+                                                               const NMIPAddr *gateway,
+                                                               guint *out_len);
 
-void _nmtstp_assert_ip4_route_exists (const char *file, guint line, const char *func, NMPlatform *platform, gboolean exists, const char *ifname, guint32 network, int plen, guint32 metric);
-#define nmtstp_assert_ip4_route_exists(platform, exists, ifname, network, plen, metric) _nmtstp_assert_ip4_route_exists (__FILE__, __LINE__, G_STRFUNC, platform, exists, ifname, network, plen, metric)
+gboolean nmtstp_ip4_route_exists (const char *ifname, guint32 network, guint8 plen, guint32 metric, const guint32 *gateway);
+
+const NMPlatformIP4Route *_nmtstp_assert_ip4_route_exists (const char *file, guint line, const char *func, NMPlatform *platform, gboolean exists, const char *ifname, guint32 network, guint8 plen, guint32 metric, const guint32 *gateway);
+#define nmtstp_assert_ip4_route_exists(platform, exists, ifname, network, plen, metric, gateway) _nmtstp_assert_ip4_route_exists (__FILE__, __LINE__, G_STRFUNC, platform, exists, ifname, network, plen, metric, gateway)
 
 /*****************************************************************************/
 
@@ -136,7 +186,7 @@ void nmtstp_ip4_address_add (NMPlatform *platform,
                              gboolean external_command,
                              int ifindex,
                              in_addr_t address,
-                             int plen,
+                             guint8 plen,
                              in_addr_t peer_address,
                              guint32 lifetime,
                              guint32 preferred,
@@ -146,7 +196,7 @@ void nmtstp_ip6_address_add (NMPlatform *platform,
                              gboolean external_command,
                              int ifindex,
                              struct in6_addr address,
-                             int plen,
+                             guint8 plen,
                              struct in6_addr peer_address,
                              guint32 lifetime,
                              guint32 preferred,
@@ -155,13 +205,19 @@ void nmtstp_ip4_address_del (NMPlatform *platform,
                              gboolean external_command,
                              int ifindex,
                              in_addr_t address,
-                             int plen,
+                             guint8 plen,
                              in_addr_t peer_address);
 void nmtstp_ip6_address_del (NMPlatform *platform,
                              gboolean external_command,
                              int ifindex,
                              struct in6_addr address,
-                             int plen);
+                             guint8 plen);
+
+const NMPlatformIP4Route *nmtstp_ip4_route_add (NMPlatform *platform, gboolean external_command,
+                                                const NMPlatformIP4Route *route);
+
+const NMPlatformIP6Route *nmtstp_ip6_route_add (NMPlatform *platform, gboolean external_command,
+                                                const NMPlatformIP6Route *route);
 
 /*****************************************************************************/
 

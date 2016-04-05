@@ -338,13 +338,20 @@ struct _NMPlatformIP4Route {
 	in_addr_t network;
 	in_addr_t gateway;
 
-	/* The bitwise inverse of the route scope. It is inverted so that the
-	 * default value (RT_SCOPE_NOWHERE) is nul. */
-	guint8 scope_inv;
-
 	/* RTA_PREFSRC/rtnl_route_get_pref_src(). A value of zero means that
 	 * no pref-src is set.  */
 	in_addr_t pref_src;
+
+	/* The route scope rtm_scope.
+	 *
+	 * Note, that for IPv4, the scope is part of the ID for a route.
+	 * That means, when we receive a route from kernel, we set rt_scope
+	 * and rt_scope_is_set=1 to indicate that the scope is fully determined.
+	 *
+	 * When adding a route, we allow the user to autodetect the scope based
+	 * on the gateway. That is controlled by leaving rt_scope_is_set=0. */
+	guint8 rt_scope;
+	bool rt_scope_is_set:1;
 };
 
 struct _NMPlatformIP6Route {
@@ -372,9 +379,8 @@ typedef struct {
 	int (*route_cmp) (const NMPlatformIPXRoute *a, const NMPlatformIPXRoute *b);
 	const char *(*route_to_string) (const NMPlatformIPXRoute *route, char *buf, gsize len);
 	GArray *(*route_get_all) (NMPlatform *self, int ifindex, NMPlatformGetRouteFlags flags);
-	gboolean (*route_add) (NMPlatform *self, int ifindex, const NMPlatformIPXRoute *route, gint64 metric);
-	gboolean (*route_delete) (NMPlatform *self, int ifindex, const NMPlatformIPXRoute *route);
-	gboolean (*route_delete_default) (NMPlatform *self, int ifindex, guint32 metric);
+	gboolean (*route_add) (NMPlatform *self, const NMPlatformIPXRoute *route, int ifindex, gint64 metric);
+	gboolean (*route_delete) (NMPlatform *self, const NMPlatformIPXRoute *route);
 	guint32 (*metric_normalize) (guint32 metric);
 } NMPlatformVTableRoute;
 
@@ -630,16 +636,12 @@ typedef struct {
 
 	GArray * (*ip4_route_get_all) (NMPlatform *, int ifindex, NMPlatformGetRouteFlags flags);
 	GArray * (*ip6_route_get_all) (NMPlatform *, int ifindex, NMPlatformGetRouteFlags flags);
-	gboolean (*ip4_route_add) (NMPlatform *, int ifindex, NMIPConfigSource source,
-	                           in_addr_t network, guint8 plen, in_addr_t gateway,
-	                           in_addr_t pref_src, guint32 metric, guint32 mss);
-	gboolean (*ip6_route_add) (NMPlatform *, int ifindex, NMIPConfigSource source,
-	                           struct in6_addr network, guint8 plen, struct in6_addr gateway,
-	                           guint32 metric, guint32 mss);
-	gboolean (*ip4_route_delete) (NMPlatform *, int ifindex, in_addr_t network, guint8 plen, guint32 metric);
-	gboolean (*ip6_route_delete) (NMPlatform *, int ifindex, struct in6_addr network, guint8 plen, guint32 metric);
-	const NMPlatformIP4Route *(*ip4_route_get) (NMPlatform *, int ifindex, in_addr_t network, guint8 plen, guint32 metric);
-	const NMPlatformIP6Route *(*ip6_route_get) (NMPlatform *, int ifindex, struct in6_addr network, guint8 plen, guint32 metric);
+	gboolean (*ip4_route_add) (NMPlatform *, const NMPlatformIP4Route *route);
+	gboolean (*ip6_route_add) (NMPlatform *, const NMPlatformIP6Route *route);
+	gboolean (*ip4_route_delete) (NMPlatform *, const NMPlatformIP4Route *route);
+	gboolean (*ip6_route_delete) (NMPlatform *, const NMPlatformIP6Route *route);
+	const NMPlatformIP4Route *(*ip4_route_get) (NMPlatform *, const NMPlatformIP4Route *route);
+	const NMPlatformIP6Route *(*ip6_route_get) (NMPlatform *, const NMPlatformIP6Route *route);
 
 	gboolean (*check_support_kernel_extended_ifa_flags) (NMPlatform *);
 	gboolean (*check_support_user_ipv6ll) (NMPlatform *);
@@ -676,21 +678,35 @@ NMPlatform *nm_platform_try_get (void);
 
 /******************************************************************/
 
-/**
- * nm_platform_route_scope_inv:
- * @scope: the route scope, either its original value, or its inverse.
- *
- * This function is useful, because the constants such as RT_SCOPE_NOWHERE
- * are 'int', so ~scope also gives an 'int'. This function gets the type
- * casts to guint8 right.
- *
- * Returns: the bitwise inverse of the route scope.
- * */
-#define nm_platform_route_scope_inv _nm_platform_uint8_inv
 static inline guint8
 _nm_platform_uint8_inv (guint8 scope)
 {
 	return (guint8) ~scope;
+}
+
+static inline guint8
+nm_platform_route_scope_for_ip4_gateway (guint32 gateway)
+{
+	return gateway
+	       ? 0   /* RT_SCOPE_UNIVERSE */
+	       : 253 /* RT_SCOPE_LINK */;
+}
+
+static inline guint8
+nm_platform_route_scope_for_ip6_gateway (const struct in6_addr *gateway)
+{
+	return gateway && !IN6_IS_ADDR_UNSPECIFIED (gateway)
+	       ? 0   /* RT_SCOPE_UNIVERSE */
+	       : 253 /* RT_SCOPE_LINK */;
+}
+
+static inline guint8
+nm_platform_route_scope_from_ip4_route (const NMPlatformIP4Route *route)
+{
+	nm_assert (route);
+	return route->rt_scope_is_set
+	       ? route->rt_scope
+	       : nm_platform_route_scope_for_ip4_gateway (route->gateway);
 }
 
 NMPNetns *nm_platform_netns_get (NMPlatform *self);
@@ -907,18 +923,14 @@ gboolean nm_platform_ip4_address_sync (NMPlatform *self, int ifindex, const GArr
 gboolean nm_platform_ip6_address_sync (NMPlatform *self, int ifindex, const GArray *known_addresses, gboolean keep_link_local);
 gboolean nm_platform_address_flush (NMPlatform *self, int ifindex);
 
-const NMPlatformIP4Route *nm_platform_ip4_route_get (NMPlatform *self, int ifindex, in_addr_t network, guint8 plen, guint32 metric);
-const NMPlatformIP6Route *nm_platform_ip6_route_get (NMPlatform *self, int ifindex, struct in6_addr network, guint8 plen, guint32 metric);
+const NMPlatformIP4Route *nm_platform_ip4_route_get (NMPlatform *self, const NMPlatformIP4Route *route);
+const NMPlatformIP6Route *nm_platform_ip6_route_get (NMPlatform *self, const NMPlatformIP6Route *route);
 GArray *nm_platform_ip4_route_get_all (NMPlatform *self, int ifindex, NMPlatformGetRouteFlags flags);
 GArray *nm_platform_ip6_route_get_all (NMPlatform *self, int ifindex, NMPlatformGetRouteFlags flags);
-gboolean nm_platform_ip4_route_add (NMPlatform *self, int ifindex, NMIPConfigSource source,
-                                    in_addr_t network, guint8 plen, in_addr_t gateway,
-                                    in_addr_t pref_src, guint32 metric, guint32 mss);
-gboolean nm_platform_ip6_route_add (NMPlatform *self, int ifindex, NMIPConfigSource source,
-                                    struct in6_addr network, guint8 plen, struct in6_addr gateway,
-                                    guint32 metric, guint32 mss);
-gboolean nm_platform_ip4_route_delete (NMPlatform *self, int ifindex, in_addr_t network, guint8 plen, guint32 metric);
-gboolean nm_platform_ip6_route_delete (NMPlatform *self, int ifindex, struct in6_addr network, guint8 plen, guint32 metric);
+gboolean nm_platform_ip4_route_add (NMPlatform *self, const NMPlatformIP4Route *route);
+gboolean nm_platform_ip6_route_add (NMPlatform *self, const NMPlatformIP6Route *route);
+gboolean nm_platform_ip4_route_delete (NMPlatform *self, const NMPlatformIP4Route *route);
+gboolean nm_platform_ip6_route_delete (NMPlatform *self, const NMPlatformIP6Route *route);
 
 const char *nm_platform_link_to_string (const NMPlatformLink *link, char *buf, gsize len);
 const char *nm_platform_lnk_gre_to_string (const NMPlatformLnkGre *lnk, char *buf, gsize len);
@@ -953,6 +965,18 @@ int nm_platform_ip4_address_cmp (const NMPlatformIP4Address *a, const NMPlatform
 int nm_platform_ip6_address_cmp (const NMPlatformIP6Address *a, const NMPlatformIP6Address *b);
 int nm_platform_ip4_route_cmp (const NMPlatformIP4Route *a, const NMPlatformIP4Route *b);
 int nm_platform_ip6_route_cmp (const NMPlatformIP6Route *a, const NMPlatformIP6Route *b);
+
+typedef enum {
+	NM_PLATFORM_IP_ROUTE_ID_TYPE_ID,
+	NM_PLATFORM_IP_ROUTE_ID_TYPE_ALL,
+} NMPlatformIPRouteIdType;
+
+int nm_platform_ip4_route_cmp_full (const NMPlatformIP4Route *a, const NMPlatformIP4Route *b, NMPlatformIPRouteIdType id_type);
+int nm_platform_ip6_route_cmp_full (const NMPlatformIP6Route *a, const NMPlatformIP6Route *b, NMPlatformIPRouteIdType id_type);
+guint nm_platform_ip4_route_hash_full (const NMPlatformIP4Route *a, NMPlatformIPRouteIdType id_type);
+guint nm_platform_ip6_route_hash_full (const NMPlatformIP6Route *a, NMPlatformIPRouteIdType id_type);
+NMPlatformIP4Route *nm_platform_ip4_route_normalize (NMPlatformIP4Route *dst, const NMPlatformIP4Route *src, NMPlatformIPRouteIdType id_type);
+NMPlatformIP6Route *nm_platform_ip6_route_normalize (NMPlatformIP6Route *dst, const NMPlatformIP6Route *src, NMPlatformIPRouteIdType id_type);
 
 gboolean nm_platform_check_support_kernel_extended_ifa_flags (NMPlatform *self);
 gboolean nm_platform_check_support_user_ipv6ll (NMPlatform *self);

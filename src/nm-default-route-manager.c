@@ -287,24 +287,25 @@ _platform_route_sync_add (const VTableIP *vtable, NMDefaultRouteManager *self, g
 		return FALSE;
 
 	if (vtable->vt->is_ip4) {
-		success = nm_platform_ip4_route_add (priv->platform,
-		                                     entry->route.rx.ifindex,
-		                                     entry->route.rx.rt_source,
-		                                     0,
-		                                     0,
-		                                     entry->route.r4.gateway,
-		                                     0,
-		                                     entry->effective_metric,
-		                                     entry->route.rx.mss);
+		NMPlatformIP4Route r = {
+			.ifindex = entry->route.rx.ifindex,
+			.rt_source = entry->route.rx.rt_source,
+			.gateway = entry->route.r4.gateway,
+			.metric = entry->effective_metric,
+			.mss = entry->route.rx.mss,
+		};
+
+		success = nm_platform_ip4_route_add (priv->platform, &r);
 	} else {
-		success = nm_platform_ip6_route_add (priv->platform,
-		                                     entry->route.rx.ifindex,
-		                                     entry->route.rx.rt_source,
-		                                     in6addr_any,
-		                                     0,
-		                                     entry->route.r6.gateway,
-		                                     entry->effective_metric,
-		                                     entry->route.rx.mss);
+		NMPlatformIP6Route r = {
+			.ifindex = entry->route.rx.ifindex,
+			.rt_source = entry->route.rx.rt_source,
+			.gateway = entry->route.r6.gateway,
+			.metric = entry->effective_metric,
+			.mss = entry->route.rx.mss,
+		};
+
+		success = nm_platform_ip6_route_add (priv->platform, &r);
 	}
 	if (!success) {
 		_LOGW (vtable->vt->addr_family, "failed to add default route %s with effective metric %u",
@@ -332,6 +333,9 @@ _platform_route_sync_flush (const VTableIP *vtable, NMDefaultRouteManager *self,
 
 		route = _vt_route_index (vtable, routes, i);
 
+		nm_assert (memcmp (route->network_ptr, &nm_ip_addr_zero, vtable->vt->is_ip4 ? sizeof (in_addr_t) : sizeof (struct in6_addr)) == 0);
+		nm_assert (route->plen == 0);
+
 		/* look at all entries and see if the route for this ifindex pair is
 		 * a known entry. */
 		for (j = 0; j < entries->len; j++) {
@@ -355,7 +359,7 @@ _platform_route_sync_flush (const VTableIP *vtable, NMDefaultRouteManager *self,
 		 */
 		if (   !entry
 		    && (has_ifindex_synced || ifindex_to_flush == route->ifindex)) {
-			vtable->vt->route_delete_default (priv->platform, route->ifindex, route->metric);
+			vtable->vt->route_delete (priv->platform, (NMPlatformIPXRoute *) route);
 			changed = TRUE;
 		}
 	}

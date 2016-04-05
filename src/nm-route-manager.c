@@ -574,9 +574,10 @@ _vx_route_sync (const VTableIP *vtable, NMRouteManager *self, int ifindex, const
 			    && cur_plat_route->rx.metric == *p_effective_metric) {
 				/* we are about to delete cur_ipx_route and we have a matching route
 				 * in platform. Delete it. */
+				nm_assert (cur_plat_route->rx.ifindex == ifindex);
 				_LOGt (vtable->vt->addr_family, "%3d: platform rt-rm #%u - %s", ifindex, i_plat_routes,
 				       vtable->vt->route_to_string (cur_plat_route, NULL, 0));
-				vtable->vt->route_delete (priv->platform, ifindex, cur_plat_route);
+				vtable->vt->route_delete (priv->platform, cur_plat_route);
 			}
 		}
 	}
@@ -741,8 +742,10 @@ next:
 			/* if @cur_ipx_route is not equal to @plat_route, the route must be deleted. */
 			if (   !cur_ipx_route
 			    || route_dest_cmp_result != 0
-			    || *p_effective_metric != cur_plat_route->rx.metric)
-				vtable->vt->route_delete (priv->platform, ifindex, cur_plat_route);
+			    || *p_effective_metric != cur_plat_route->rx.metric) {
+				nm_assert (cur_plat_route->rx.ifindex == ifindex);
+				vtable->vt->route_delete (priv->platform, cur_plat_route);
+			}
 
 			cur_plat_route = _get_next_plat_route (plat_routes_idx, FALSE, &i_plat_routes);
 		}
@@ -815,15 +818,15 @@ next:
 					gateway_routes = g_array_new (FALSE, FALSE, sizeof (guint));
 				g_array_append_val (gateway_routes, i_ipx_routes);
 			} else
-				vtable->vt->route_add (priv->platform, 0, cur_ipx_route, *p_effective_metric);
+				vtable->vt->route_add (priv->platform, cur_ipx_route, 0, *p_effective_metric);
 		}
 
 		if (gateway_routes) {
 			for (i = 0; i < gateway_routes->len; i++) {
 				i_ipx_routes = g_array_index (gateway_routes, guint, i);
-				vtable->vt->route_add (priv->platform, 0,
+				vtable->vt->route_add (priv->platform,
 				                       ipx_routes->index->entries[i_ipx_routes],
-				                       effective_metrics[i_ipx_routes]);
+				                       0, effective_metrics[i_ipx_routes]);
 			}
 			g_array_unref (gateway_routes);
 		}
@@ -872,7 +875,7 @@ next:
 			    || route_dest_cmp_result != 0
 			    || !_route_equals_ignoring_ifindex (vtable, cur_plat_route, cur_ipx_route, *p_effective_metric)) {
 
-				if (!vtable->vt->route_add (priv->platform, ifindex, cur_ipx_route, *p_effective_metric)) {
+				if (!vtable->vt->route_add (priv->platform, cur_ipx_route, ifindex, *p_effective_metric)) {
 					if (cur_ipx_route->rx.rt_source < NM_IP_CONFIG_SOURCE_USER) {
 						_LOGD (vtable->vt->addr_family,
 						       "ignore error adding IPv%c route to kernel: %s",
@@ -986,6 +989,7 @@ _ip4_device_routes_idle_cb (IP4DeviceRoutePurgeEntry *entry)
 {
 	NMRouteManager *self;
 	NMRouteManagerPrivate *priv;
+	NMPObject obj;
 
 	nm_clear_g_source (&entry->idle_id);
 
@@ -998,11 +1002,9 @@ _ip4_device_routes_idle_cb (IP4DeviceRoutePurgeEntry *entry)
 
 	_LOGt (vtable_v4.vt->addr_family, "device-route: delete %s", nmp_object_to_string (entry->obj, NMP_OBJECT_TO_STRING_PUBLIC, NULL, 0));
 
-	nm_platform_ip4_route_delete (priv->platform,
-	                              entry->obj->ip4_route.ifindex,
-	                              entry->obj->ip4_route.network,
-	                              entry->obj->ip4_route.plen,
-	                              entry->obj->ip4_route.metric);
+	nmp_object_stackinit_id_ip4_route (&obj, &entry->obj->ip4_route, NM_PLATFORM_IP_ROUTE_ID_TYPE_ID);
+
+	nm_platform_ip4_route_delete (priv->platform, &obj.ip4_route);
 
 	g_hash_table_remove (priv->ip4_device_routes.entries, entry->obj);
 	_ip4_device_routes_cancel (self);

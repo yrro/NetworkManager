@@ -25,6 +25,9 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 
+#include "nm-platform-utils.h"
+#include "nmp-object.h"
+
 #include "test-common.h"
 
 #define SIGNAL_DATA_FMT "'%s-%s' ifindex %d%s%s%s (%d times received)"
@@ -196,8 +199,156 @@ link_callback (NMPlatform *platform, NMPObjectType obj_type, int ifindex, NMPlat
 
 /*****************************************************************************/
 
+static int
+_sort_routes (gconstpointer p_a, gconstpointer p_b, gpointer user_data)
+{
+	gboolean is_v4 = GPOINTER_TO_INT (user_data);
+
+	if (is_v4)
+		return nm_platform_ip4_route_cmp (p_a, p_b);
+	else
+		return nm_platform_ip6_route_cmp (p_a, p_b);
+}
+
+const NMPlatformIPXRoute **
+nmtstp_ip_route_get_by_destination (NMPlatform *platform,
+                                    gboolean is_v4,
+                                    int ifindex,
+                                    const NMIPAddr *network,
+                                    guint8 plen,
+                                    guint32 metric,
+                                    const NMIPAddr *gateway,
+                                    guint *out_len)
+{
+	gs_unref_array GArray *routes = NULL;
+	GPtrArray *result = NULL;
+	gs_unref_hashtable GHashTable *check_dupes = NULL;
+	NMIPAddr network_clean;
+	guint i;
+
+	g_assert (ifindex >= 0);
+	g_assert (plen >= 0 && plen <= (is_v4 ? 32 : 128));
+
+	NM_SET_OUT (out_len, 0);
+
+	_init_platform (&platform, FALSE);
+
+	check_dupes = g_hash_table_new ((GHashFunc) nmp_object_id_hash, (GEqualFunc) nmp_object_id_equal);
+	result = g_ptr_array_new ();
+
+	network = nm_utils_ipx_address_clear_host_address (is_v4 ? AF_INET : AF_INET6,
+	                                                   &network_clean,
+	                                                   network ?: &nm_ip_addr_zero,
+	                                                   plen);
+
+	if (!is_v4)
+		metric = nm_utils_ip6_route_metric_normalize (metric);
+
+	if (is_v4)
+		routes = nm_platform_ip4_route_get_all (platform, ifindex, NM_PLATFORM_GET_ROUTE_FLAGS_WITH_RTPROT_KERNEL);
+	else
+		routes = nm_platform_ip6_route_get_all (platform, ifindex, NM_PLATFORM_GET_ROUTE_FLAGS_WITH_RTPROT_KERNEL);
+
+	for (i = 0; routes && i < routes->len; i++) {
+		const NMPlatformIPXRoute *r_i = is_v4
+		                                ? (NMPlatformIPXRoute *) &g_array_index (routes, NMPlatformIP4Route, i)
+		                                : (NMPlatformIPXRoute *) &g_array_index (routes, NMPlatformIP6Route, i);
+		const NMPlatformIPXRoute *r_2;
+		const NMPObject *o_2;
+
+		g_assert (r_i->rx.ifindex == ifindex);
+
+		if (   r_i->rx.plen != plen
+		    || r_i->rx.metric != metric)
+			continue;
+
+		if (is_v4) {
+			if (r_i->r4.network != *((guint32 *) network))
+				continue;
+			if (   gateway
+			    && r_i->r4.gateway != *((guint32 *) gateway))
+				continue;
+		} else {
+			if (!IN6_ARE_ADDR_EQUAL (&r_i->r6.network, network))
+				continue;
+			if (   gateway
+			    && !IN6_ARE_ADDR_EQUAL (&r_i->r6.gateway, gateway))
+				continue;
+		}
+
+		r_2 = is_v4
+		     ? (NMPlatformIPXRoute *) nm_platform_ip4_route_get (platform, &r_i->r4)
+		     : (NMPlatformIPXRoute *) nm_platform_ip6_route_get (platform, &r_i->r6);
+		g_assert (r_2);
+		g_assert (   ( is_v4 && nm_platform_ip4_route_cmp (&r_i->r4, &r_2->r4) == 0)
+		          || (!is_v4 && nm_platform_ip6_route_cmp (&r_i->r6, &r_2->r6) == 0));
+
+		o_2 = NMP_OBJECT_UP_CAST (r_2);
+		g_assert (NMP_OBJECT_IS_VALID (o_2));
+		g_assert (NMP_OBJECT_GET_TYPE (o_2) == (is_v4 ? NMP_OBJECT_TYPE_IP4_ROUTE : NMP_OBJECT_TYPE_IP6_ROUTE));
+
+		g_ptr_array_add (result, (gpointer) r_2);
+		if (!nm_g_hash_table_add (check_dupes, (gpointer) o_2))
+			g_assert_not_reached ();
+	}
+
+	/* check whether the multi-index of the platform cache agrees... */
+	if (NM_IS_LINUX_PLATFORM (platform)) {
+		const NMPlatformObject *const *routes_cached;
+		NMPCacheId cache_id;
+		guint len;
+
+		if (is_v4)
+			nmp_cache_id_init_routes_by_destination_ip4 (&cache_id, network->addr4, plen, metric);
+		else
+			nmp_cache_id_init_routes_by_destination_ip6 (&cache_id, &network->addr6, plen, metric);
+
+		routes_cached = nm_linux_platform_lookup (platform, &cache_id, &len);
+
+		if (len)
+			g_assert (routes_cached && routes_cached[len] == NULL);
+		else
+			g_assert (!routes_cached);
+
+		for (i =0; routes_cached && i < len; i++) {
+			const NMPObject *o;
+			const NMPObject *o_2;
+
+			g_assert (routes_cached [i]);
+			o = NMP_OBJECT_UP_CAST (routes_cached [i]);
+			g_assert (NMP_OBJECT_IS_VALID (o));
+			g_assert (NMP_OBJECT_GET_TYPE (o) == (is_v4 ? NMP_OBJECT_TYPE_IP4_ROUTE : NMP_OBJECT_TYPE_IP6_ROUTE));
+
+			if (gateway) {
+				if (   ( is_v4 && o->ip4_route.gateway != *((guint32 *) gateway))
+				    || (!is_v4 && !IN6_ARE_ADDR_EQUAL (&o->ip6_route.gateway, gateway)))
+					continue;
+			}
+
+			o_2 = g_hash_table_lookup (check_dupes, o);
+			g_assert (o_2);
+			g_assert (o_2 == o);
+
+			if (!g_hash_table_remove (check_dupes, o))
+				g_assert_not_reached ();
+		}
+
+		g_assert (g_hash_table_size (check_dupes) == 0);
+	}
+
+	if (result->len > 0) {
+		g_ptr_array_sort_with_data (result, _sort_routes, GINT_TO_POINTER (!!is_v4));
+		NM_SET_OUT (out_len, result->len);
+		g_ptr_array_add (result, NULL);
+		return (gpointer) g_ptr_array_free (result, FALSE);
+	}
+	g_ptr_array_unref (result);
+	return NULL;
+}
+
+
 gboolean
-nmtstp_ip4_route_exists (const char *ifname, guint32 network, int plen, guint32 metric)
+nmtstp_ip4_route_exists (const char *ifname, guint32 network, guint8 plen, guint32 metric, const guint32 *gateway)
 {
 	gs_free char *arg_network = NULL;
 	const char *argv[] = {
@@ -216,6 +367,7 @@ nmtstp_ip4_route_exists (const char *ifname, guint32 network, int plen, guint32 
 	gboolean success;
 	gs_free_error GError *error = NULL;
 	gs_free char *metric_pattern = NULL;
+	gs_free char *via_pattern = NULL;
 
 	g_assert (ifname && nm_utils_iface_valid_name (ifname));
 	g_assert (!strstr (ifname, " metric "));
@@ -253,6 +405,7 @@ nmtstp_ip4_route_exists (const char *ifname, guint32 network, int plen, guint32 
 	g_assert (std_out);
 
 	metric_pattern = g_strdup_printf (" metric %u", metric);
+	via_pattern = gateway ? g_strdup_printf (" via %s", nm_utils_inet4_ntop (*gateway, NULL)) : NULL;
 	out = std_out;
 	while (out) {
 		char *eol = strchr (out, '\n');
@@ -264,44 +417,93 @@ nmtstp_ip4_route_exists (const char *ifname, guint32 network, int plen, guint32 
 			continue;
 
 		if (metric == 0) {
-			if (!strstr (line, " metric "))
-				return TRUE;
+			if (strstr (line, " metric "))
+				continue;
+		} else {
+			p = strstr (line, metric_pattern);
+			if (!p || !NM_IN_SET (p[strlen (metric_pattern)], ' ', '\0'))
+				continue;
 		}
-		p = strstr (line, metric_pattern);
-		if (p && NM_IN_SET (p[strlen (metric_pattern)], ' ', '\0'))
-			return TRUE;
+
+		if (gateway) {
+			if (*gateway == 0) {
+				if (strstr (line, " via "))
+					continue;
+			} else {
+				p = strstr (line, via_pattern);
+				if (!p || !NM_IN_SET (p[strlen (via_pattern)], ' ', '\0'))
+					continue;
+			}
+		}
+		return TRUE;
 	}
 	return FALSE;
 }
 
-void
-_nmtstp_assert_ip4_route_exists (const char *file, guint line, const char *func, NMPlatform *platform, gboolean exists, const char *ifname, guint32 network, int plen, guint32 metric)
+const NMPlatformIP4Route *
+_nmtstp_assert_ip4_route_exists (const char *file,
+                                 guint line,
+                                 const char *func,
+                                 NMPlatform *platform,
+                                 gboolean exists,
+                                 const char *ifname,
+                                 guint32 network,
+                                 guint8 plen,
+                                 guint32 metric,
+                                 const guint32 *gateway)
 {
 	int ifindex;
 	gboolean exists_checked;
+	char s_buf[NM_UTILS_INET_ADDRSTRLEN];
+	gs_free const NMPlatformIP4Route **routes = NULL;
+	guint len;
 
 	_init_platform (&platform, FALSE);
 
 	/* Check for existance of the route by spawning iproute2. Do this because platform
 	 * code might be entirely borked, but we expect ip-route to give a correct result.
 	 * If the ip command cannot be found, we accept this as success. */
-	exists_checked = nmtstp_ip4_route_exists (ifname, network, plen, metric);
+	exists_checked = nmtstp_ip4_route_exists (ifname, network, plen, metric, gateway);
 	if (exists_checked != -1 && !exists_checked != !exists) {
-		g_error ("[%s:%u] %s(): We expect the ip4 route %s/%d metric %u %s, but it %s",
+		g_error ("[%s:%u] %s(): We expect the ip4 route %s/%d%s metric %u %s, but it %s",
 		         file, line, func,
-		         nm_utils_inet4_ntop (network, NULL), plen, metric,
+		         nm_utils_inet4_ntop (network, NULL), plen,
+		         gateway ? nm_sprintf_bufa (100, " gateway %s", nm_utils_inet4_ntop (*gateway, s_buf)) : " no-gateway",
+		         metric,
 		         exists ? "to exist" : "not to exist",
 		         exists ? "doesn't" : "does");
 	}
 
 	ifindex = nm_platform_link_get_ifindex (platform, ifname);
 	g_assert (ifindex > 0);
-	if (!nm_platform_ip4_route_get (platform, ifindex, network, plen, metric) != !exists) {
-		g_error ("[%s:%u] %s(): The ip4 route %s/%d metric %u %s, but platform thinks %s",
-		         file, line, func,
-		         nm_utils_inet4_ntop (network, NULL), plen, metric,
-		         exists ? "exists" : "does not exist",
-		         exists ? "it doesn't" : "it does");
+
+	routes = (gpointer) nmtstp_ip_route_get_by_destination (platform, TRUE, ifindex, (NMIPAddr *) &network,
+	                                                        plen, metric, (NMIPAddr *) gateway, &len);
+	if (routes) {
+		if (!exists) {
+			g_error ("[%s:%u] %s(): The ip4 route %s/%d via %s metric %u %s, but platform thinks %s",
+			         file, line, func,
+			         nm_utils_inet4_ntop (network, NULL),
+			         plen,
+			         nm_utils_inet4_ntop (gateway ? *gateway : 0, s_buf),
+			         metric,
+			         exists ? "exists" : "does not exist",
+			         exists ? "it doesn't" : "it does");
+		}
+		g_assert (len == 1);
+		return routes[0];
+	} else {
+		if (exists) {
+			g_error ("[%s:%u] %s(): The ip4 route %s/%d via %s metric %u %s, but platform thinks %s",
+			         file, line, func,
+			         nm_utils_inet4_ntop (network, NULL),
+			         plen,
+			         nm_utils_inet4_ntop (gateway ? *gateway : 0, s_buf),
+			         metric,
+			         exists ? "exists" : "does not exist",
+			         exists ? "it doesn't" : "it does");
+		}
+		return NULL;
 	}
 }
 
@@ -414,7 +616,7 @@ nmtstp_wait_for_signal_until (NMPlatform *platform, gint64 until_ms)
 const NMPlatformLink *
 nmtstp_wait_for_link (NMPlatform *platform, const char *ifname, NMLinkType expected_link_type, guint timeout_ms)
 {
-	return nmtstp_wait_for_link_until (platform, ifname, expected_link_type, nm_utils_get_monotonic_timestamp_ms () + timeout_ms);
+	return nmtstp_wait_for_link_until (platform, ifname, expected_link_type, nm_utils_get_monotonic_timestamp_ms () + (gint64) timeout_ms);
 }
 
 const NMPlatformLink *
@@ -443,7 +645,7 @@ nmtstp_wait_for_link_until (NMPlatform *platform, const char *ifname, NMLinkType
 const NMPlatformLink *
 nmtstp_assert_wait_for_link (NMPlatform *platform, const char *ifname, NMLinkType expected_link_type, guint timeout_ms)
 {
-	return nmtstp_assert_wait_for_link_until (platform, ifname, expected_link_type, nm_utils_get_monotonic_timestamp_ms () + timeout_ms);
+	return nmtstp_assert_wait_for_link_until (platform, ifname, expected_link_type, nm_utils_get_monotonic_timestamp_ms () + (gint64) timeout_ms);
 }
 
 const NMPlatformLink *
@@ -454,6 +656,55 @@ nmtstp_assert_wait_for_link_until (NMPlatform *platform, const char *ifname, NML
 	plink = nmtstp_wait_for_link_until (platform, ifname, expected_link_type, until_ms);
 	g_assert (plink);
 	return plink;
+}
+
+/*****************************************************************************/
+
+static const void *
+_wait_for_ip_route_until (NMPlatform *platform, int is_v4, int ifindex, const NMIPAddr *network, guint8 plen, guint32 metric, const NMIPAddr *gateway, gint64 until_ms)
+{
+	gint64 now;
+
+	_init_platform (&platform, FALSE);
+
+	while (TRUE) {
+		gs_free const NMPlatformIPXRoute **routes = NULL;
+
+		now = nm_utils_get_monotonic_timestamp_ms ();
+
+		routes = nmtstp_ip_route_get_by_destination (platform, is_v4, ifindex, network, plen, metric, gateway, NULL);
+		if (routes)
+			return routes[0];
+
+		if (until_ms < now)
+			return NULL;
+
+		nmtstp_wait_for_signal (platform, MAX (1, until_ms - now));
+	}
+}
+
+const NMPlatformIP4Route *
+nmtstp_wait_for_ip4_route (NMPlatform *platform, int ifindex, guint32 network, guint8 plen, guint32 metric, guint32 gateway, guint timeout_ms)
+{
+	return _wait_for_ip_route_until (platform, TRUE, ifindex, (NMIPAddr *) &network, plen, metric, (NMIPAddr *) &gateway, nm_utils_get_monotonic_timestamp_ms () + (gint64) timeout_ms);
+}
+
+const NMPlatformIP4Route *
+nmtstp_wait_for_ip4_route_until (NMPlatform *platform, int ifindex, guint32 network, guint8 plen, guint32 metric, guint32 gateway, gint64 until_ms)
+{
+	return _wait_for_ip_route_until (platform, TRUE, ifindex, (NMIPAddr *) &network, plen, metric, (NMIPAddr *) &gateway, until_ms);
+}
+
+const NMPlatformIP6Route *
+nmtstp_wait_for_ip6_route (NMPlatform *platform, int ifindex, const struct in6_addr *network, guint8 plen, guint32 metric, const struct in6_addr *gateway, guint timeout_ms)
+{
+	return _wait_for_ip_route_until (platform, FALSE, ifindex, (NMIPAddr *) network, plen, metric, (NMIPAddr *) gateway, nm_utils_get_monotonic_timestamp_ms () + (gint64) timeout_ms);
+}
+
+const NMPlatformIP6Route *
+nmtstp_wait_for_ip6_route_until (NMPlatform *platform, int ifindex, const struct in6_addr *network, guint8 plen, guint32 metric, const struct in6_addr *gateway, gint64 until_ms)
+{
+	return _wait_for_ip_route_until (platform, FALSE, ifindex, (NMIPAddr *) network, plen, metric, (NMIPAddr *) gateway, until_ms);
 }
 
 /*****************************************************************************/
@@ -592,7 +843,7 @@ _ip_address_add (NMPlatform *platform,
                  gboolean is_v4,
                  int ifindex,
                  const NMIPAddr *address,
-                 int plen,
+                 guint8 plen,
                  const NMIPAddr *peer_address,
                  guint32 lifetime,
                  guint32 preferred,
@@ -730,7 +981,7 @@ nmtstp_ip4_address_add (NMPlatform *platform,
                         gboolean external_command,
                         int ifindex,
                         in_addr_t address,
-                        int plen,
+                        guint8 plen,
                         in_addr_t peer_address,
                         guint32 lifetime,
                         guint32 preferred,
@@ -755,7 +1006,7 @@ nmtstp_ip6_address_add (NMPlatform *platform,
                         gboolean external_command,
                         int ifindex,
                         struct in6_addr address,
-                        int plen,
+                        guint8 plen,
                         struct in6_addr peer_address,
                         guint32 lifetime,
                         guint32 preferred,
@@ -782,7 +1033,7 @@ _ip_address_del (NMPlatform *platform,
                  gboolean is_v4,
                  int ifindex,
                  const NMIPAddr *address,
-                 int plen,
+                 guint8 plen,
                  const NMIPAddr *peer_address)
 {
 	gint64 end_time;
@@ -873,7 +1124,7 @@ nmtstp_ip4_address_del (NMPlatform *platform,
                         gboolean external_command,
                         int ifindex,
                         in_addr_t address,
-                        int plen,
+                        guint8 plen,
                         in_addr_t peer_address)
 {
 	_ip_address_del (platform,
@@ -890,7 +1141,7 @@ nmtstp_ip6_address_del (NMPlatform *platform,
                         gboolean external_command,
                         int ifindex,
                         struct in6_addr address,
-                        int plen)
+                        guint8 plen)
 {
 	_ip_address_del (platform,
 	                 external_command,
@@ -899,6 +1150,119 @@ nmtstp_ip6_address_del (NMPlatform *platform,
 	                 (NMIPAddr *) &address,
 	                 plen,
 	                 NULL);
+}
+
+/*****************************************************************************/
+
+static gconstpointer
+_ip_route_add (NMPlatform *platform,
+               gboolean external_command,
+               gboolean is_v4,
+               const NMPlatformIPXRoute *route)
+{
+	gint64 end_time;
+	char s_network[NM_UTILS_INET_ADDRSTRLEN];
+	char s_gateway[NM_UTILS_INET_ADDRSTRLEN];
+	char s_pref_src[NM_UTILS_INET_ADDRSTRLEN];
+	const NMPlatformLink *pllink;
+	NMPObject obj_normalized;
+	const NMPlatformIPXRoute *route_orig;
+	guint i, len;
+
+	g_assert (route);
+	g_assert (route->rx.ifindex > 0);
+
+	external_command = nmtstp_run_command_check_external (external_command);
+
+	_init_platform (&platform, external_command);
+
+	route_orig = route;
+	if (is_v4)
+		nmp_object_stackinit_id_ip4_route (&obj_normalized, &route->r4, NM_PLATFORM_IP_ROUTE_ID_TYPE_ID);
+	else
+		nmp_object_stackinit_id_ip6_route (&obj_normalized, &route->r6, NM_PLATFORM_IP_ROUTE_ID_TYPE_ID);
+	route = &obj_normalized.ipx_route;
+
+	pllink = nmtstp_link_get (platform, route->rx.ifindex, NULL);
+	g_assert (pllink);
+
+	if (external_command) {
+		s_network[0] = '\0';
+		s_gateway[0] = '\0';
+		s_pref_src[0] = '\0';
+		if (is_v4) {
+			nm_utils_inet4_ntop (route->r4.network, s_network);
+			if (route->r4.gateway)
+				nm_utils_inet4_ntop (route->r4.gateway, s_gateway);
+			if (route->r4.pref_src)
+				nm_utils_inet4_ntop (route->r4.pref_src, s_pref_src);
+		} else {
+			nm_utils_inet6_ntop (&route->r6.network, s_network);
+			if (!IN6_IS_ADDR_UNSPECIFIED (&route->r6.gateway))
+				nm_utils_inet6_ntop (&route->r6.gateway, s_gateway);
+		}
+
+		nmtstp_run_command_check ("ip route append %s/%u%s dev '%s' metric %u proto %u%s%s",
+		                          s_network,
+		                          route->rx.plen,
+		                          s_gateway[0] ? nm_sprintf_bufa (100, " via %s", s_gateway) : "",
+		                          pllink->name,
+		                          route->rx.metric,
+		                          nmp_utils_ip_config_source_coerce_to_rtprot (route->r4.rt_source),
+		                          s_pref_src[0] ? nm_sprintf_bufa (100, " src %s", s_pref_src) : "",
+		                          route->rx.mss ? nm_sprintf_bufa (100, " advmss %u", route->rx.mss) : "");
+	} else {
+		gboolean success;
+
+		if (is_v4)
+			success = nm_platform_ip4_route_add (platform, &route_orig->r4);
+		else
+			success = nm_platform_ip6_route_add (platform, &route_orig->r6);
+		g_assert (success);
+	}
+
+	/* Let's wait until we see the address. */
+	end_time = nm_utils_get_monotonic_timestamp_ms () + 250;
+	do {
+		gs_free const NMPlatformIPXRoute **routes = NULL;
+
+		if (external_command)
+			nm_platform_process_events (platform);
+
+		/* let's wait until we see the address as we added it. */
+		routes = nmtstp_ip_route_get_by_destination (platform, is_v4, route->rx.ifindex,
+		                                             (NMIPAddr *) route->rx.network_ptr,
+		                                             route->rx.plen,
+		                                             route->rx.metric,
+		                                             is_v4 ? (NMIPAddr *) &route->r4.gateway : (NMIPAddr *) &route->r6.gateway,
+		                                             &len);
+		for (i = 0; i < len; i++) {
+			const NMPObject *o2;
+
+			o2 = NMP_OBJECT_UP_CAST (routes[i]);
+			if (nmp_object_equal (o2, &obj_normalized))
+				return &o2->ipx_route;
+		}
+
+		/* for internal command, we expect not to reach this line.*/
+		g_assert (external_command);
+
+		nmtstp_assert_wait_for_signal_until (platform, end_time);
+	} while (TRUE);
+}
+
+const NMPlatformIP4Route *
+nmtstp_ip4_route_add (NMPlatform *platform, gboolean external_command,
+                      const NMPlatformIP4Route *route)
+{
+	return _ip_route_add (platform, external_command, TRUE, (const NMPlatformIPXRoute *) route);
+}
+
+const NMPlatformIP6Route *
+nmtstp_ip6_route_add (NMPlatform *platform, gboolean external_command,
+                      const NMPlatformIP6Route *route)
+{
+	return _ip_route_add (platform, external_command, FALSE, (const NMPlatformIPXRoute *) route);
 }
 
 /*****************************************************************************/

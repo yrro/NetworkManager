@@ -1864,8 +1864,10 @@ _new_from_nl_route (struct nlmsghdr *nlh, gboolean id_only)
 	else
 		obj->ip6_route.gateway = nh.gateway.addr6;
 
-	if (is_v4)
-		obj->ip4_route.scope_inv = nm_platform_route_scope_inv (rtm->rtm_scope);
+	if (is_v4) {
+		obj->ip4_route.rt_scope = rtm->rtm_scope;
+		obj->ip4_route.rt_scope_is_set = TRUE;
+	}
 
 	if (is_v4) {
 		if (_check_addr_or_errout (tb, RTA_PREFSRC, addr_len))
@@ -2229,77 +2231,79 @@ nla_put_failure:
 static struct nl_msg *
 _nl_msg_new_route (int nlmsg_type,
                    int nlmsg_flags,
-                   int family,
-                   int ifindex,
-                   NMIPConfigSource source,
-                   unsigned char scope,
-                   gconstpointer network,
-                   guint8 plen,
-                   gconstpointer gateway,
-                   guint32 metric,
-                   guint32 mss,
-                   gconstpointer pref_src)
+                   const NMPObject *obj)
 {
-	struct nl_msg *msg;
-	struct rtmsg rtmsg = {
-		.rtm_family = family,
-		.rtm_tos = 0,
-		.rtm_table = RT_TABLE_MAIN, /* omit setting RTA_TABLE attribute */
-		.rtm_protocol = nmp_utils_ip_config_source_coerce_to_rtprot (source),
-		.rtm_scope = scope,
-		.rtm_type = RTN_UNICAST,
-		.rtm_flags = 0,
-		.rtm_dst_len = plen,
-		.rtm_src_len = 0,
-	};
+	int addr_family;
+	gboolean is_v4;
+	const NMIPAddr *gateway;
 	NMIPAddr network_clean;
-
 	gsize addr_len;
+	struct nl_msg *msg;
 
-	nm_assert (NM_IN_SET (family, AF_INET, AF_INET6));
+	nm_assert (NM_IN_SET (NMP_OBJECT_GET_TYPE (obj), NMP_OBJECT_TYPE_IP4_ROUTE, NMP_OBJECT_TYPE_IP6_ROUTE));
 	nm_assert (NM_IN_SET (nlmsg_type, RTM_NEWROUTE, RTM_DELROUTE));
-	nm_assert (network);
 
 	msg = nlmsg_alloc_simple (nlmsg_type, nlmsg_flags);
 	if (!msg)
-		g_return_val_if_reached (NULL);
+		return NULL;
 
-	if (nlmsg_append (msg, &rtmsg, sizeof (rtmsg), NLMSG_ALIGNTO) < 0)
-		goto nla_put_failure;
+	addr_family = NMP_OBJECT_GET_CLASS (obj)->addr_family;
+	is_v4 = (addr_family == AF_INET);
+	addr_len = is_v4 ? sizeof (in_addr_t) : sizeof (struct in6_addr);
 
-	addr_len = family == AF_INET ? sizeof (in_addr_t) : sizeof (struct in6_addr);
+	gateway = is_v4
+	          ? (gpointer) &obj->ip4_route.gateway
+	          : (gpointer) &obj->ip6_route.gateway;
 
-	nm_utils_ipx_address_clear_host_address (family, &network_clean, network, plen);
+	{
+		struct rtmsg rtmsg = {
+			.rtm_family   = addr_family,
+			.rtm_tos      = 0,
+			.rtm_table    = RT_TABLE_MAIN, /* omit setting RTA_TABLE attribute */
+			.rtm_protocol = nmp_utils_ip_config_source_coerce_to_rtprot (obj->ip_route.rt_source),
+			.rtm_scope    = is_v4
+			                ? nm_platform_route_scope_from_ip4_route (&obj->ip4_route)
+			                : nm_platform_route_scope_for_ip6_gateway (&gateway->addr6),
+			.rtm_type     = RTN_UNICAST,
+			.rtm_flags    = 0,
+			.rtm_dst_len  = obj->ip_route.plen,
+			.rtm_src_len  = 0,
+		};
+
+		if (nlmsg_append (msg, &rtmsg, sizeof (rtmsg), NLMSG_ALIGNTO) < 0)
+			goto nla_put_failure;
+	}
+
+	nm_utils_ipx_address_clear_host_address (addr_family, &network_clean, obj->ip_route.network_ptr, obj->ip_route.plen);
 	NLA_PUT (msg, RTA_DST, addr_len, &network_clean);
 
-	NLA_PUT_U32 (msg, RTA_PRIORITY, metric);
+	NLA_PUT_U32 (msg, RTA_PRIORITY, obj->ip_route.metric);
 
-	if (pref_src)
-		NLA_PUT (msg, RTA_PREFSRC, addr_len, pref_src);
+	if (is_v4 && obj->ip4_route.pref_src)
+		NLA_PUT (msg, RTA_PREFSRC, addr_len, &obj->ip4_route.pref_src);
 
-	if (mss > 0) {
+	if (obj->ip_route.mss > 0) {
 		struct nlattr *metrics;
 
 		metrics = nla_nest_start (msg, RTA_METRICS);
 		if (!metrics)
 			goto nla_put_failure;
 
-		NLA_PUT_U32 (msg, RTAX_ADVMSS, mss);
+		NLA_PUT_U32 (msg, RTAX_ADVMSS, obj->ip_route.mss);
 
 		nla_nest_end(msg, metrics);
 	}
 
 	/* We currently don't have need for multi-hop routes... */
-	if (   gateway
-	    && memcmp (gateway, &nm_ip_addr_zero, addr_len) != 0)
+	if (memcmp (gateway, &nm_ip_addr_zero, addr_len) != 0)
 		NLA_PUT (msg, RTA_GATEWAY, addr_len, gateway);
-	NLA_PUT_U32 (msg, RTA_OIF, ifindex);
+	NLA_PUT_U32 (msg, RTA_OIF, obj->ip_route.ifindex);
 
 	return msg;
 
 nla_put_failure:
 	nlmsg_free (msg);
-	g_return_val_if_reached (NULL);
+	return NULL;
 }
 
 /******************************************************************/
@@ -3902,6 +3906,7 @@ do_add_addrroute (NMPlatform *platform, const NMPObject *obj_id, struct nl_msg *
 {
 	NMLinuxPlatformPrivate *priv = NM_LINUX_PLATFORM_GET_PRIVATE (platform);
 	WaitForNlResponseResult seq_result = WAIT_FOR_NL_RESPONSE_RESULT_UNKNOWN;
+	gboolean success = FALSE;
 	int nle;
 	char s_buf[256];
 	const NMPObject *obj;
@@ -3925,9 +3930,15 @@ do_add_addrroute (NMPlatform *platform, const NMPObject *obj_id, struct nl_msg *
 
 	nm_assert (seq_result);
 
-	_NMLOG (seq_result == WAIT_FOR_NL_RESPONSE_RESULT_RESPONSE_OK
-	            ? LOGL_DEBUG
-	            : LOGL_ERR,
+	if (seq_result == WAIT_FOR_NL_RESPONSE_RESULT_RESPONSE_OK)
+		success = TRUE;
+	else if (   (int) seq_result == -EEXIST
+	         && NM_IN_SET (NMP_OBJECT_GET_TYPE (obj_id),
+	                       NMP_OBJECT_TYPE_IP4_ROUTE,
+	                       NMP_OBJECT_TYPE_IP6_ROUTE))
+		success = TRUE;
+
+	_NMLOG (success ? LOGL_DEBUG : LOGL_ERR,
 	        "do-add-%s[%s]: %s",
 	        NMP_OBJECT_GET_CLASS (obj_id)->obj_type_name,
 	        nmp_object_to_string (obj_id, NMP_OBJECT_TO_STRING_ID, NULL, 0),
@@ -3950,7 +3961,7 @@ do_add_addrroute (NMPlatform *platform, const NMPObject *obj_id, struct nl_msg *
 
 	/* Adding is only successful, if kernel reported success *and* we have the
 	 * expected object in cache afterwards. */
-	return obj && seq_result == WAIT_FOR_NL_RESPONSE_RESULT_RESPONSE_OK;
+	return obj && success;
 }
 
 static gboolean
@@ -3962,8 +3973,6 @@ do_delete_object (NMPlatform *platform, const NMPObject *obj_id, struct nl_msg *
 	char s_buf[256];
 	gboolean success = TRUE;
 	const char *log_detail = "";
-
-	event_handler_read_netlink (platform, FALSE);
 
 	nle = _nl_send_auto_with_seq (platform, nlmsg, &seq_result, NULL);
 	if (nle < 0) {
@@ -4122,6 +4131,8 @@ link_delete (NMPlatform *platform, int ifindex)
 	NMPObject obj_id;
 	const NMPObject *obj;
 
+	delayed_action_handle_all (platform, TRUE);
+
 	obj = nmp_cache_lookup_link (priv->cache, ifindex);
 	if (!obj || !obj->_link.netlink.is_in_netlink)
 		return FALSE;
@@ -4132,6 +4143,8 @@ link_delete (NMPlatform *platform, int ifindex)
 	                          NULL,
 	                          0,
 	                          0);
+	if (!nlmsg)
+		g_return_val_if_reached (FALSE);
 
 	nmp_object_stackinit_id_link (&obj_id, ifindex);
 	return do_delete_object (platform, &obj_id, nlmsg);
@@ -5494,6 +5507,8 @@ ip4_address_delete (NMPlatform *platform, int ifindex, in_addr_t addr, guint8 pl
 	nm_auto_nlmsg struct nl_msg *nlmsg = NULL;
 	NMPObject obj_id;
 
+	delayed_action_handle_all (platform, TRUE);
+
 	nlmsg = _nl_msg_new_address (RTM_DELADDR,
 	                             0,
 	                             AF_INET,
@@ -5518,6 +5533,8 @@ ip6_address_delete (NMPlatform *platform, int ifindex, struct in6_addr addr, gui
 {
 	nm_auto_nlmsg struct nl_msg *nlmsg = NULL;
 	NMPObject obj_id;
+
+	delayed_action_handle_all (platform, TRUE);
 
 	nlmsg = _nl_msg_new_address (RTM_DELADDR,
 	                             0,
@@ -5618,146 +5635,93 @@ ip6_route_get_all (NMPlatform *platform, int ifindex, NMPlatformGetRouteFlags fl
 }
 
 static gboolean
-ip4_route_add (NMPlatform *platform, int ifindex, NMIPConfigSource source,
-               in_addr_t network, guint8 plen, in_addr_t gateway,
-               in_addr_t pref_src, guint32 metric, guint32 mss)
+ip4_route_add (NMPlatform *platform, const NMPlatformIP4Route *route)
 {
 	NMPObject obj_id;
 	nm_auto_nlmsg struct nl_msg *nlmsg = NULL;
 
-	nlmsg = _nl_msg_new_route (RTM_NEWROUTE,
-	                           NLM_F_CREATE | NLM_F_REPLACE,
-	                           AF_INET,
-	                           ifindex,
-	                           source,
-	                           gateway ? RT_SCOPE_UNIVERSE : RT_SCOPE_LINK,
-	                           &network,
-	                           plen,
-	                           &gateway,
-	                           metric,
-	                           mss,
-	                           pref_src ? &pref_src : NULL);
+	nmp_object_stackinit_id_ip4_route (&obj_id, route, NM_PLATFORM_IP_ROUTE_ID_TYPE_ID);
 
-	nmp_object_stackinit_id_ip4_route (&obj_id, ifindex, network, plen, metric);
+	nlmsg = _nl_msg_new_route (RTM_NEWROUTE,
+	                           NLM_F_CREATE | NLM_F_APPEND,
+	                           &obj_id);
+	if (!nlmsg)
+		g_return_val_if_reached (FALSE);
+
 	return do_add_addrroute (platform, &obj_id, nlmsg);
 }
 
 static gboolean
-ip6_route_add (NMPlatform *platform, int ifindex, NMIPConfigSource source,
-               struct in6_addr network, guint8 plen, struct in6_addr gateway,
-               guint32 metric, guint32 mss)
+ip6_route_add (NMPlatform *platform, const NMPlatformIP6Route *route)
 {
 	NMPObject obj_id;
 	nm_auto_nlmsg struct nl_msg *nlmsg = NULL;
 
-	nlmsg = _nl_msg_new_route (RTM_NEWROUTE,
-	                           NLM_F_CREATE | NLM_F_REPLACE,
-	                           AF_INET6,
-	                           ifindex,
-	                           source,
-	                           !IN6_IS_ADDR_UNSPECIFIED (&gateway) ? RT_SCOPE_UNIVERSE : RT_SCOPE_LINK,
-	                           &network,
-	                           plen,
-	                           &gateway,
-	                           metric,
-	                           mss,
-	                           NULL);
+	nmp_object_stackinit_id_ip6_route (&obj_id, route, NM_PLATFORM_IP_ROUTE_ID_TYPE_ID);
 
-	nmp_object_stackinit_id_ip6_route (&obj_id, ifindex, &network, plen, metric);
+	nlmsg = _nl_msg_new_route (RTM_NEWROUTE,
+	                           NLM_F_CREATE | NLM_F_APPEND,
+	                           &obj_id);
+	if (!nlmsg)
+		g_return_val_if_reached (FALSE);
+
 	return do_add_addrroute (platform, &obj_id, nlmsg);
 }
 
 static gboolean
-ip4_route_delete (NMPlatform *platform, int ifindex, in_addr_t network, guint8 plen, guint32 metric)
+ip4_route_delete (NMPlatform *platform, const NMPlatformIP4Route *route)
 {
 	NMLinuxPlatformPrivate *priv = NM_LINUX_PLATFORM_GET_PRIVATE (platform);
 	nm_auto_nlmsg struct nl_msg *nlmsg = NULL;
 	NMPObject obj_id;
 
-	nmp_object_stackinit_id_ip4_route (&obj_id, ifindex, network, plen, metric);
+	nmp_object_stackinit_id_ip4_route (&obj_id, route, NM_PLATFORM_IP_ROUTE_ID_TYPE_ALL);
 
-	if (metric == 0) {
-		/* Deleting an IPv4 route with metric 0 does not only delete an exectly matching route.
-		 * If no route with metric 0 exists, it might delete another route to the same destination.
-		 * For nm_platform_ip4_route_delete() we don't want this semantic.
-		 *
-		 * Instead, make sure that we have the most recent state and process all
-		 * delayed actions (including re-reading data from netlink). */
-		delayed_action_handle_all (platform, TRUE);
+	delayed_action_handle_all (platform, TRUE);
 
-		if (!nmp_cache_lookup_obj (priv->cache, &obj_id)) {
-			/* hmm... we are about to delete an IP4 route with metric 0. We must only
-			 * send the delete request if such a route really exists. Above we refreshed
-			 * the platform cache, still no such route exists.
-			 *
-			 * Be extra careful and reload the routes. We must be sure that such a
-			 * route doesn't exists, because when we add an IPv4 address, we immediately
-			 * afterwards try to delete the kernel-added device route with metric 0.
-			 * It might be, that we didn't yet get the notification about that route.
-			 *
-			 * FIXME: once our ip4_address_add() is sure that upon return we have
-			 * the latest state from in the platform cache, we might save this
-			 * additional expensive cache-resync. */
-			do_request_one_type (platform, NMP_OBJECT_TYPE_IP4_ROUTE);
-
-			if (!nmp_cache_lookup_obj (priv->cache, &obj_id))
-				return TRUE;
-		}
-	}
+	if (!nmp_cache_lookup_obj (priv->cache, &obj_id))
+		return TRUE;
 
 	nlmsg = _nl_msg_new_route (RTM_DELROUTE,
 	                           0,
-	                           AF_INET,
-	                           ifindex,
-	                           NM_IP_CONFIG_SOURCE_UNKNOWN,
-	                           RT_SCOPE_NOWHERE,
-	                           &network,
-	                           plen,
-	                           NULL,
-	                           metric,
-	                           0,
-	                           NULL);
+	                           &obj_id);
 	if (!nlmsg)
-		return FALSE;
+		g_return_val_if_reached (FALSE);
 
 	return do_delete_object (platform, &obj_id, nlmsg);
 }
 
 static gboolean
-ip6_route_delete (NMPlatform *platform, int ifindex, struct in6_addr network, guint8 plen, guint32 metric)
+ip6_route_delete (NMPlatform *platform, const NMPlatformIP6Route *route)
 {
+	NMLinuxPlatformPrivate *priv = NM_LINUX_PLATFORM_GET_PRIVATE (platform);
 	nm_auto_nlmsg struct nl_msg *nlmsg = NULL;
 	NMPObject obj_id;
 
-	metric = nm_utils_ip6_route_metric_normalize (metric);
+	nmp_object_stackinit_id_ip6_route (&obj_id, route, NM_PLATFORM_IP_ROUTE_ID_TYPE_ALL);
+
+	delayed_action_handle_all (platform, TRUE);
+
+	if (!nmp_cache_lookup_obj (priv->cache, &obj_id))
+		return TRUE;
 
 	nlmsg = _nl_msg_new_route (RTM_DELROUTE,
 	                           0,
-	                           AF_INET6,
-	                           ifindex,
-	                           NM_IP_CONFIG_SOURCE_UNKNOWN,
-	                           RT_SCOPE_NOWHERE,
-	                           &network,
-	                           plen,
-	                           NULL,
-	                           metric,
-	                           0,
-	                           NULL);
+	                           &obj_id);
 	if (!nlmsg)
-		return FALSE;
-
-	nmp_object_stackinit_id_ip6_route (&obj_id, ifindex, &network, plen, metric);
+		g_return_val_if_reached (FALSE);
 
 	return do_delete_object (platform, &obj_id, nlmsg);
 }
 
 static const NMPlatformIP4Route *
-ip4_route_get (NMPlatform *platform, int ifindex, in_addr_t network, guint8 plen, guint32 metric)
+ip4_route_get (NMPlatform *platform, const NMPlatformIP4Route *route)
 {
 	NMPObject obj_id;
 	const NMPObject *obj;
 
-	nmp_object_stackinit_id_ip4_route (&obj_id, ifindex, network, plen, metric);
+	nmp_object_stackinit_id_ip4_route (&obj_id, route, NM_PLATFORM_IP_ROUTE_ID_TYPE_ID);
+
 	obj = nmp_cache_lookup_obj (NM_LINUX_PLATFORM_GET_PRIVATE (platform)->cache, &obj_id);
 	if (nmp_object_is_visible (obj))
 		return &obj->ip4_route;
@@ -5765,14 +5729,13 @@ ip4_route_get (NMPlatform *platform, int ifindex, in_addr_t network, guint8 plen
 }
 
 static const NMPlatformIP6Route *
-ip6_route_get (NMPlatform *platform, int ifindex, struct in6_addr network, guint8 plen, guint32 metric)
+ip6_route_get (NMPlatform *platform, const NMPlatformIP6Route *route)
 {
 	NMPObject obj_id;
 	const NMPObject *obj;
 
-	metric = nm_utils_ip6_route_metric_normalize (metric);
+	nmp_object_stackinit_id_ip6_route (&obj_id, route, NM_PLATFORM_IP_ROUTE_ID_TYPE_ID);
 
-	nmp_object_stackinit_id_ip6_route (&obj_id, ifindex, &network, plen, metric);
 	obj = nmp_cache_lookup_obj (NM_LINUX_PLATFORM_GET_PRIVATE (platform)->cache, &obj_id);
 	if (nmp_object_is_visible (obj))
 		return &obj->ip6_route;
@@ -5928,7 +5891,7 @@ continue_reading:
 				int errsv = e->error > 0 ? e->error : -e->error;
 
 				/* Error message reported back from kernel. */
-				_LOGD ("netlink: recvmsg: error message from kernel: %s (%d) for request %d",
+				_LOGT ("netlink: recvmsg: error message from kernel: %s (%d) for request %d",
 				       strerror (errsv),
 				       errsv,
 				       nlmsg_hdr (msg)->nlmsg_seq);

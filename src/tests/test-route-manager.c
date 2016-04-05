@@ -76,14 +76,9 @@ setup_dev1_ip4 (int ifindex)
 	/* Add some route outside of route manager. The route manager
 	 * should get rid of it upon sync. */
 	if (!nm_platform_ip4_route_add (NM_PLATFORM_GET,
-	                                route.ifindex,
-	                                NM_IP_CONFIG_SOURCE_USER,
-	                                nmtst_inet4_from_string ("9.0.0.0"),
-	                                8,
-	                                INADDR_ANY,
-	                                0,
-	                                10,
-	                                route.mss))
+	                                nmtst_platform_ip4_route_full (route.ifindex, "9.0.0.0", 8, NULL,
+	                                                               NM_IP_CONFIG_SOURCE_USER, 10, route.mss,
+	                                                               0, FALSE, NULL)))
 		g_assert_not_reached ();
 
 	route.rt_source = nmp_utils_ip_config_source_round_trip_rtprot (NM_IP_CONFIG_SOURCE_USER);
@@ -169,7 +164,8 @@ test_ip4 (test_fixture *fixture, gconstpointer user_data)
 			.gateway = INADDR_ANY,
 			.metric = 20,
 			.mss = 1000,
-			.scope_inv = nm_platform_route_scope_inv (RT_SCOPE_LINK),
+			.rt_scope = RT_SCOPE_LINK,
+			.rt_scope_is_set = TRUE,
 		},
 		{
 			.rt_source = nmp_utils_ip_config_source_round_trip_rtprot (NM_IP_CONFIG_SOURCE_USER),
@@ -179,7 +175,8 @@ test_ip4 (test_fixture *fixture, gconstpointer user_data)
 			.gateway = nmtst_inet4_from_string ("6.6.6.1"),
 			.metric = 21021,
 			.mss = 0,
-			.scope_inv = nm_platform_route_scope_inv (RT_SCOPE_UNIVERSE),
+			.rt_scope = RT_SCOPE_UNIVERSE,
+			.rt_scope_is_set = TRUE,
 		},
 		{
 			.rt_source = nmp_utils_ip_config_source_round_trip_rtprot (NM_IP_CONFIG_SOURCE_USER),
@@ -189,7 +186,8 @@ test_ip4 (test_fixture *fixture, gconstpointer user_data)
 			.gateway = INADDR_ANY,
 			.metric = 22,
 			.mss = 0,
-			.scope_inv = nm_platform_route_scope_inv (RT_SCOPE_LINK),
+			.rt_scope = RT_SCOPE_LINK,
+			.rt_scope_is_set = TRUE,
 		},
 		{
 			.rt_source = nmp_utils_ip_config_source_round_trip_rtprot (NM_IP_CONFIG_SOURCE_USER),
@@ -199,7 +197,8 @@ test_ip4 (test_fixture *fixture, gconstpointer user_data)
 			.gateway = INADDR_ANY,
 			.metric = 21,
 			.mss = 0,
-			.scope_inv = nm_platform_route_scope_inv (RT_SCOPE_LINK),
+			.rt_scope = RT_SCOPE_LINK,
+			.rt_scope_is_set = TRUE,
 		},
 		{
 			.rt_source = nmp_utils_ip_config_source_round_trip_rtprot (NM_IP_CONFIG_SOURCE_USER),
@@ -209,7 +208,8 @@ test_ip4 (test_fixture *fixture, gconstpointer user_data)
 			.gateway = nmtst_inet4_from_string ("6.6.6.2"),
 			.metric = 22,
 			.mss = 0,
-			.scope_inv = nm_platform_route_scope_inv (RT_SCOPE_UNIVERSE),
+			.rt_scope = RT_SCOPE_UNIVERSE,
+			.rt_scope_is_set = TRUE,
 		},
 	};
 
@@ -222,7 +222,8 @@ test_ip4 (test_fixture *fixture, gconstpointer user_data)
 			.gateway = INADDR_ANY,
 			.metric = 20,
 			.mss = 0,
-			.scope_inv = nm_platform_route_scope_inv (RT_SCOPE_LINK),
+			.rt_scope = RT_SCOPE_LINK,
+			.rt_scope_is_set = TRUE,
 		},
 		{
 			.rt_source = nmp_utils_ip_config_source_round_trip_rtprot (NM_IP_CONFIG_SOURCE_USER),
@@ -232,7 +233,8 @@ test_ip4 (test_fixture *fixture, gconstpointer user_data)
 			.gateway = INADDR_ANY,
 			.metric = 21,
 			.mss = 0,
-			.scope_inv = nm_platform_route_scope_inv (RT_SCOPE_LINK),
+			.rt_scope = RT_SCOPE_LINK,
+			.rt_scope_is_set = TRUE,
 		},
 		{
 			.rt_source = nmp_utils_ip_config_source_round_trip_rtprot (NM_IP_CONFIG_SOURCE_USER),
@@ -242,7 +244,8 @@ test_ip4 (test_fixture *fixture, gconstpointer user_data)
 			.gateway = INADDR_ANY,
 			.metric = 22,
 			.mss = 0,
-			.scope_inv = nm_platform_route_scope_inv (RT_SCOPE_LINK),
+			.rt_scope = RT_SCOPE_LINK,
+			.rt_scope_is_set = TRUE,
 		},
 		{
 			.rt_source = nmp_utils_ip_config_source_round_trip_rtprot (NM_IP_CONFIG_SOURCE_USER),
@@ -252,7 +255,8 @@ test_ip4 (test_fixture *fixture, gconstpointer user_data)
 			.gateway = INADDR_ANY,
 			.metric = 21,
 			.mss = 0,
-			.scope_inv = nm_platform_route_scope_inv (RT_SCOPE_LINK),
+			.rt_scope = RT_SCOPE_LINK,
+			.rt_scope_is_set = TRUE,
 		},
 		{
 			.rt_source = nmp_utils_ip_config_source_round_trip_rtprot (NM_IP_CONFIG_SOURCE_USER),
@@ -262,7 +266,8 @@ test_ip4 (test_fixture *fixture, gconstpointer user_data)
 			.gateway = nmtst_inet4_from_string ("6.6.6.2"),
 			.metric = 22,
 			.mss = 0,
-			.scope_inv = nm_platform_route_scope_inv (RT_SCOPE_UNIVERSE),
+			.rt_scope = RT_SCOPE_UNIVERSE,
+			.rt_scope_is_set = TRUE,
 		},
 	};
 
@@ -275,7 +280,8 @@ test_ip4 (test_fixture *fixture, gconstpointer user_data)
 			.gateway = INADDR_ANY,
 			.metric = 22,
 			.mss = 0,
-			.scope_inv = nm_platform_route_scope_inv (RT_SCOPE_LINK),
+			.rt_scope = RT_SCOPE_LINK,
+			.rt_scope_is_set = TRUE,
 		},
 		{
 			.rt_source = nmp_utils_ip_config_source_round_trip_rtprot (NM_IP_CONFIG_SOURCE_USER),
@@ -285,7 +291,8 @@ test_ip4 (test_fixture *fixture, gconstpointer user_data)
 			.gateway = INADDR_ANY,
 			.metric = 20,
 			.mss = 0,
-			.scope_inv = nm_platform_route_scope_inv (RT_SCOPE_LINK),
+			.rt_scope = RT_SCOPE_LINK,
+			.rt_scope_is_set = TRUE,
 		},
 		{
 			.rt_source = nmp_utils_ip_config_source_round_trip_rtprot (NM_IP_CONFIG_SOURCE_USER),
@@ -295,7 +302,8 @@ test_ip4 (test_fixture *fixture, gconstpointer user_data)
 			.gateway = nmtst_inet4_from_string ("6.6.6.2"),
 			.metric = 22,
 			.mss = 0,
-			.scope_inv = nm_platform_route_scope_inv (RT_SCOPE_UNIVERSE),
+			.rt_scope = RT_SCOPE_UNIVERSE,
+			.rt_scope_is_set = TRUE,
 		},
 		{
 			.rt_source = nmp_utils_ip_config_source_round_trip_rtprot (NM_IP_CONFIG_SOURCE_USER),
@@ -307,7 +315,8 @@ test_ip4 (test_fixture *fixture, gconstpointer user_data)
 			 * with metric 20 (above). But we don't remove the metric 21. */
 			.metric = 21,
 			.mss = 0,
-			.scope_inv = nm_platform_route_scope_inv (RT_SCOPE_LINK),
+			.rt_scope = RT_SCOPE_LINK,
+			.rt_scope_is_set = TRUE,
 		},
 	};
 
@@ -382,28 +391,28 @@ setup_dev0_ip6 (int ifindex)
 	                             3600,
 	                             0);
 
-	route = nmtst_platform_ip6_route_full ("2001:db8:8086::",
+	route = nmtst_platform_ip6_route_full (ifindex,
+	                                       "2001:db8:8086::",
 	                                       48,
 	                                       NULL,
-	                                       ifindex,
 	                                       NM_IP_CONFIG_SOURCE_USER,
 	                                       20,
 	                                       0);
 	g_array_append_val (routes, *route);
 
-	route = nmtst_platform_ip6_route_full ("2001:db8:1337::",
+	route = nmtst_platform_ip6_route_full (ifindex,
+	                                       "2001:db8:1337::",
 	                                       48,
 	                                       NULL,
-	                                       ifindex,
 	                                       NM_IP_CONFIG_SOURCE_USER,
 	                                       0,
 	                                       0);
 	g_array_append_val (routes, *route);
 
-	route = nmtst_platform_ip6_route_full ("2001:db8:abad:c0de::",
+	route = nmtst_platform_ip6_route_full (ifindex,
+	                                       "2001:db8:abad:c0de::",
 	                                       64,
 	                                       "2001:db8:8086::1",
-	                                       ifindex,
 	                                       NM_IP_CONFIG_SOURCE_USER,
 	                                       21,
 	                                       0);
@@ -422,46 +431,41 @@ setup_dev1_ip6 (int ifindex)
 	/* Add some route outside of route manager. The route manager
 	 * should get rid of it upon sync. */
 	if (!nm_platform_ip6_route_add (NM_PLATFORM_GET,
-	                                ifindex,
-	                                NM_IP_CONFIG_SOURCE_USER,
-	                                *nmtst_inet6_from_string ("2001:db8:8088::"),
-	                                48,
-	                                in6addr_any,
-	                                10,
-	                                0))
+	                                nmtst_platform_ip6_route_full (ifindex, "2001:db8:8088::", 48, NULL,
+	                                                               NM_IP_CONFIG_SOURCE_USER, 10, 0)))
 		g_assert_not_reached ();
 
-	route = nmtst_platform_ip6_route_full ("2001:db8:8086::",
+	route = nmtst_platform_ip6_route_full (ifindex,
+	                                       "2001:db8:8086::",
 	                                       48,
 	                                       NULL,
-	                                       ifindex,
 	                                       NM_IP_CONFIG_SOURCE_USER,
 	                                       20,
 	                                       0);
 	g_array_append_val (routes, *route);
 
-	route = nmtst_platform_ip6_route_full ("2001:db8:1337::",
+	route = nmtst_platform_ip6_route_full (ifindex,
+	                                       "2001:db8:1337::",
 	                                       48,
 	                                       NULL,
-	                                       ifindex,
 	                                       NM_IP_CONFIG_SOURCE_USER,
 	                                       1024,
 	                                       0);
 	g_array_append_val (routes, *route);
 
-	route = nmtst_platform_ip6_route_full ("2001:db8:d34d::",
+	route = nmtst_platform_ip6_route_full (ifindex,
+	                                       "2001:db8:d34d::",
 	                                       64,
 	                                       "2001:db8:8086::2",
-	                                       ifindex,
 	                                       NM_IP_CONFIG_SOURCE_USER,
 	                                       20,
 	                                       0);
 	g_array_append_val (routes, *route);
 
-	route = nmtst_platform_ip6_route_full ("2001:db8:abad:c0de::",
+	route = nmtst_platform_ip6_route_full (ifindex,
+	                                       "2001:db8:abad:c0de::",
 	                                       64,
 	                                       NULL,
-	                                       ifindex,
 	                                       NM_IP_CONFIG_SOURCE_USER,
 	                                       22,
 	                                       0);
@@ -487,28 +491,28 @@ update_dev0_ip6 (int ifindex)
 	                             3600,
 	                             0);
 
-	route = nmtst_platform_ip6_route_full ("2001:db8:8086::",
+	route = nmtst_platform_ip6_route_full (ifindex,
+	                                       "2001:db8:8086::",
 	                                       48,
 	                                       NULL,
-	                                       ifindex,
 	                                       NM_IP_CONFIG_SOURCE_USER,
 	                                       20,
 	                                       0);
 	g_array_append_val (routes, *route);
 
-	route = nmtst_platform_ip6_route_full ("2001:db8:1337::",
+	route = nmtst_platform_ip6_route_full (ifindex,
+	                                       "2001:db8:1337::",
 	                                       48,
 	                                       NULL,
-	                                       ifindex,
 	                                       NM_IP_CONFIG_SOURCE_USER,
 	                                       0,
 	                                       0);
 	g_array_append_val (routes, *route);
 
-	route = nmtst_platform_ip6_route_full ("2001:db8:abad:c0de::",
+	route = nmtst_platform_ip6_route_full (ifindex,
+	                                       "2001:db8:abad:c0de::",
 	                                       64,
 	                                       NULL,
-	                                       ifindex,
 	                                       NM_IP_CONFIG_SOURCE_USER,
 	                                       21,
 	                                       0);
@@ -791,9 +795,9 @@ _assert_route_check (const NMPlatformVTableRoute *vtable, gboolean has, const NM
 	g_assert (route);
 
 	if (vtable->is_ip4)
-		r = (const NMPlatformIPXRoute *) nm_platform_ip4_route_get (NM_PLATFORM_GET, route->rx.ifindex, route->r4.network, route->rx.plen, route->rx.metric);
+		r = (const NMPlatformIPXRoute *) nm_platform_ip4_route_get (NM_PLATFORM_GET, &route->r4);
 	else
-		r = (const NMPlatformIPXRoute *) nm_platform_ip6_route_get (NM_PLATFORM_GET, route->rx.ifindex, route->r6.network, route->rx.plen, route->rx.metric);
+		r = (const NMPlatformIPXRoute *) nm_platform_ip6_route_get (NM_PLATFORM_GET, &route->r6);
 
 	if (!has) {
 		g_assert (!r);
@@ -824,15 +828,15 @@ test_ip4_full_sync (test_fixture *fixture, gconstpointer user_data)
 
 	nm_log_dbg (LOGD_CORE, "TEST start test_ip4_full_sync(): start");
 
-	r01 = *nmtst_platform_ip4_route_full ("12.3.4.0", 24, NULL,
-	                                      fixture->ifindex0, NM_IP_CONFIG_SOURCE_USER,
-	                                      100, 0, RT_SCOPE_LINK, NULL);
-	r02 = *nmtst_platform_ip4_route_full ("13.4.5.6", 32, "12.3.4.1",
-	                                      fixture->ifindex0, NM_IP_CONFIG_SOURCE_USER,
-	                                      100, 0, RT_SCOPE_UNIVERSE, NULL);
-	r03 = *nmtst_platform_ip4_route_full ("14.5.6.7", 32, "12.3.4.1",
-	                                      fixture->ifindex0, NM_IP_CONFIG_SOURCE_USER,
-	                                      110, 0, RT_SCOPE_UNIVERSE, NULL);
+	r01 = *nmtst_platform_ip4_route_full (fixture->ifindex0, "12.3.4.0", 24, NULL,
+	                                      NM_IP_CONFIG_SOURCE_USER,
+	                                      100, 0, RT_SCOPE_LINK, TRUE, NULL);
+	r02 = *nmtst_platform_ip4_route_full (fixture->ifindex0, "13.4.5.6", 32, "12.3.4.1",
+	                                      NM_IP_CONFIG_SOURCE_USER,
+	                                      100, 0, RT_SCOPE_UNIVERSE, TRUE, NULL);
+	r03 = *nmtst_platform_ip4_route_full (fixture->ifindex0, "14.5.6.7", 32, "12.3.4.1",
+	                                      NM_IP_CONFIG_SOURCE_USER,
+	                                      110, 0, RT_SCOPE_UNIVERSE, TRUE, NULL);
 	g_array_set_size (routes, 2);
 	g_array_index (routes, NMPlatformIP4Route, 0) = r01;
 	g_array_index (routes, NMPlatformIP4Route, 1) = r02;
@@ -842,7 +846,7 @@ test_ip4_full_sync (test_fixture *fixture, gconstpointer user_data)
 	_assert_route_check (vtable, TRUE,  (const NMPlatformIPXRoute *) &r02);
 	_assert_route_check (vtable, FALSE, (const NMPlatformIPXRoute *) &r03);
 
-	vtable->route_add (NM_PLATFORM_GET, 0, (const NMPlatformIPXRoute *) &r03, -1);
+	vtable->route_add (NM_PLATFORM_GET, (const NMPlatformIPXRoute *) &r03, 0, -1);
 
 	_assert_route_check (vtable, TRUE,  (const NMPlatformIPXRoute *) &r01);
 	_assert_route_check (vtable, TRUE,  (const NMPlatformIPXRoute *) &r02);

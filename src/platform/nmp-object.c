@@ -377,38 +377,33 @@ _vt_cmd_obj_stackinit_id_ip6_address (NMPObject *obj, const NMPObject *src)
 }
 
 const NMPObject *
-nmp_object_stackinit_id_ip4_route (NMPObject *obj, int ifindex, guint32 network, guint8 plen, guint32 metric)
+nmp_object_stackinit_id_ip4_route (NMPObject *obj, const NMPlatformIP4Route *route, NMPlatformIPRouteIdType id_type)
 {
 	nmp_object_stackinit (obj, NMP_OBJECT_TYPE_IP4_ROUTE, NULL);
-	obj->ip4_route.ifindex = ifindex;
-	obj->ip4_route.network = network;
-	obj->ip4_route.plen = plen;
-	obj->ip4_route.metric = metric;
+	if (route)
+		nm_platform_ip4_route_normalize (&obj->ip4_route, route, id_type);
 	return obj;
 }
 
 static void
 _vt_cmd_obj_stackinit_id_ip4_route (NMPObject *obj, const NMPObject *src)
 {
-	nmp_object_stackinit_id_ip4_route (obj, src->ip_route.ifindex, src->ip4_route.network, src->ip_route.plen, src->ip_route.metric);
+	nmp_object_stackinit_id_ip4_route (obj, &src->ip4_route, NM_PLATFORM_IP_ROUTE_ID_TYPE_ID);
 }
 
 const NMPObject *
-nmp_object_stackinit_id_ip6_route (NMPObject *obj, int ifindex, const struct in6_addr *network, guint8 plen, guint32 metric)
+nmp_object_stackinit_id_ip6_route (NMPObject *obj, const NMPlatformIP6Route *route, NMPlatformIPRouteIdType id_type)
 {
 	nmp_object_stackinit (obj, NMP_OBJECT_TYPE_IP6_ROUTE, NULL);
-	obj->ip6_route.ifindex = ifindex;
-	if (network)
-		obj->ip6_route.network = *network;
-	obj->ip6_route.plen = plen;
-	obj->ip6_route.metric = metric;
+	if (route)
+		nm_platform_ip6_route_normalize (&obj->ip6_route, route, id_type);
 	return obj;
 }
 
 static void
 _vt_cmd_obj_stackinit_id_ip6_route (NMPObject *obj, const NMPObject *src)
 {
-	nmp_object_stackinit_id_ip6_route (obj, src->ip_route.ifindex, &src->ip6_route.network, src->ip_route.plen, src->ip_route.metric);
+	nmp_object_stackinit_id_ip6_route (obj, &src->ip6_route, NM_PLATFORM_IP_ROUTE_ID_TYPE_ID);
 }
 
 /******************************************************************/
@@ -567,8 +562,6 @@ _vt_cmd_plobj_to_string_id (ip4_address, NMPlatformIP4Address, "%d: %s/%d%s%s", 
                                                                obj->peer_address != obj->address ? "," : "",
                                                                obj->peer_address != obj->address ? nm_utils_inet4_ntop (obj->peer_address & nm_utils_ip4_prefix_to_netmask (obj->plen), buf2) : "");
 _vt_cmd_plobj_to_string_id (ip6_address, NMPlatformIP6Address, "%d: %s",        obj->ifindex, nm_utils_inet6_ntop (&obj->address, buf1));
-_vt_cmd_plobj_to_string_id (ip4_route,   NMPlatformIP4Route,   "%d: %s/%d %d",  obj->ifindex, nm_utils_inet4_ntop ( obj->network, buf1), obj->plen, obj->metric);
-_vt_cmd_plobj_to_string_id (ip6_route,   NMPlatformIP6Route,   "%d: %s/%d %d",  obj->ifindex, nm_utils_inet6_ntop (&obj->network, buf1), obj->plen, obj->metric);
 
 int
 nmp_object_cmp (const NMPObject *obj1, const NMPObject *obj2)
@@ -733,16 +726,10 @@ _vt_cmd_plobj_id_copy (ip6_address, NMPlatformIP6Address, {
 	dst->address = src->address;
 });
 _vt_cmd_plobj_id_copy (ip4_route, NMPlatformIP4Route, {
-	dst->ifindex = src->ifindex;
-	dst->plen = src->plen;
-	dst->metric = src->metric;
-	dst->network = src->network;
+	nm_platform_ip4_route_normalize (dst, src, NM_PLATFORM_IP_ROUTE_ID_TYPE_ID);
 });
 _vt_cmd_plobj_id_copy (ip6_route, NMPlatformIP6Route, {
-	dst->ifindex = src->ifindex;
-	dst->plen = src->plen;
-	dst->metric = src->metric;
-	dst->network = src->network;
+	nm_platform_ip6_route_normalize (dst, src, NM_PLATFORM_IP_ROUTE_ID_TYPE_ID);
 });
 
 /* Uses internally nmp_object_copy(), hence it also violates the const
@@ -804,15 +791,9 @@ _vt_cmd_plobj_id_equal (ip6_address, NMPlatformIP6Address,
                         /* for IPv6 addresses, the prefix length is not part of the primary identifier. */
                         && IN6_ARE_ADDR_EQUAL (&obj1->address, &obj2->address));
 _vt_cmd_plobj_id_equal (ip4_route, NMPlatformIP4Route,
-                           obj1->ifindex == obj2->ifindex
-                        && obj1->plen == obj2->plen
-                        && obj1->metric == obj2->metric
-                        && obj1->network == obj2->network);
+                           nm_platform_ip4_route_cmp_full (obj1, obj2, NM_PLATFORM_IP_ROUTE_ID_TYPE_ID) == 0);
 _vt_cmd_plobj_id_equal (ip6_route, NMPlatformIP6Route,
-                           obj1->ifindex == obj2->ifindex
-                        && obj1->plen == obj2->plen
-                        && obj1->metric == obj2->metric
-                        && IN6_ARE_ADDR_EQUAL( &obj1->network, &obj2->network));
+                           nm_platform_ip6_route_cmp_full (obj1, obj2, NM_PLATFORM_IP_ROUTE_ID_TYPE_ID) == 0);
 
 guint
 nmp_object_id_hash (const NMPObject *obj)
@@ -862,18 +843,10 @@ _vt_cmd_plobj_id_hash (ip6_address, NMPlatformIP6Address, {
 	hash = hash * 33 + _id_hash_ip6_addr (&obj->address);
 })
 _vt_cmd_plobj_id_hash (ip4_route, NMPlatformIP4Route, {
-	hash = (guint) 2569857221u;
-	hash = hash      + ((guint) obj->ifindex);
-	hash = hash * 33 + ((guint) obj->plen);
-	hash = hash * 33 + ((guint) obj->metric);
-	hash = hash * 33 + ((guint) obj->network);
+	hash = nm_platform_ip4_route_hash_full (obj, NM_PLATFORM_IP_ROUTE_ID_TYPE_ID);
 })
 _vt_cmd_plobj_id_hash (ip6_route, NMPlatformIP6Route, {
-	hash = (guint) 3999787007u;
-	hash = hash      + ((guint) obj->ifindex);
-	hash = hash * 33 + ((guint) obj->plen);
-	hash = hash * 33 + ((guint) obj->metric);
-	hash = hash * 33 + _id_hash_ip6_addr (&obj->network);
+	hash = nm_platform_ip6_route_hash_full (obj, NM_PLATFORM_IP_ROUTE_ID_TYPE_ID);
 })
 
 gboolean
@@ -2172,7 +2145,7 @@ const NMPClass _nmp_classes[NMP_OBJECT_TYPE_MAX] = {
 		.cmd_plobj_id_copy                  = _vt_cmd_plobj_id_copy_ip4_route,
 		.cmd_plobj_id_equal                 = _vt_cmd_plobj_id_equal_ip4_route,
 		.cmd_plobj_id_hash                  = _vt_cmd_plobj_id_hash_ip4_route,
-		.cmd_plobj_to_string_id             = _vt_cmd_plobj_to_string_id_ip4_route,
+		.cmd_plobj_to_string_id             = (const char *(*) (const NMPlatformObject *obj, char *buf, gsize len)) nm_platform_ip4_route_to_string,
 		.cmd_plobj_to_string                = (const char *(*) (const NMPlatformObject *obj, char *buf, gsize len)) nm_platform_ip4_route_to_string,
 		.cmd_plobj_cmp                      = (int (*) (const NMPlatformObject *obj1, const NMPlatformObject *obj2)) nm_platform_ip4_route_cmp,
 	},
@@ -2192,7 +2165,7 @@ const NMPClass _nmp_classes[NMP_OBJECT_TYPE_MAX] = {
 		.cmd_plobj_id_copy                  = _vt_cmd_plobj_id_copy_ip6_route,
 		.cmd_plobj_id_equal                 = _vt_cmd_plobj_id_equal_ip6_route,
 		.cmd_plobj_id_hash                  = _vt_cmd_plobj_id_hash_ip6_route,
-		.cmd_plobj_to_string_id             = _vt_cmd_plobj_to_string_id_ip6_route,
+		.cmd_plobj_to_string_id             = (const char *(*) (const NMPlatformObject *obj, char *buf, gsize len)) nm_platform_ip6_route_to_string,
 		.cmd_plobj_to_string                = (const char *(*) (const NMPlatformObject *obj, char *buf, gsize len)) nm_platform_ip6_route_to_string,
 		.cmd_plobj_cmp                      = (int (*) (const NMPlatformObject *obj1, const NMPlatformObject *obj2)) nm_platform_ip6_route_cmp,
 	},
