@@ -53,6 +53,15 @@ crypto_init (GError **error)
 	return TRUE;
 }
 
+void
+crypto_deinit (void)
+{
+	if (!initialized)
+		return;
+
+	gnutls_global_deinit ();
+}
+
 char *
 crypto_decrypt (const char *cipher,
                 int key_type,
