@@ -497,6 +497,8 @@ main (int argc, char **argv)
 
 	ret = g_test_run ();
 
+	crypto_deinit ();
+
 	return ret;
 }
 

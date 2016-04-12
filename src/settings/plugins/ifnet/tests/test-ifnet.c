@@ -37,6 +37,7 @@
 #include "wpa_parser.h"
 #include "connection_parser.h"
 #include "nm-config.h"
+#include "crypto.h"
 
 #include "nm-test-utils.h"
 
@@ -346,7 +347,7 @@ test_delete_connection (void)
 static void
 test_missing_config (void)
 {
-	GError *error = NULL;
+	gs_free_error GError *error = NULL;
 	NMConnection *connection;
 
 	connection = ifnet_update_connection_from_config_block ("eth8", NULL, &error);
@@ -391,6 +392,7 @@ main (int argc, char **argv)
 
 	ifnet_destroy ();
 	wpa_parser_destroy ();
+	crypto_deinit ();
 
 	return ret;
 }
