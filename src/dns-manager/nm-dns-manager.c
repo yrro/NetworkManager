@@ -937,14 +937,6 @@ merge_global_dns_config (NMResolvConfData *rc, NMGlobalDnsConfig *global_conf)
 	return TRUE;
 }
 
-static void
-sort_configs (NMDnsManager *self)
-{
-	NMDnsManagerPrivate *priv = NM_DNS_MANAGER_GET_PRIVATE (self);
-
-	priv->configs = g_slist_sort (priv->configs, ip_config_compare);
-}
-
 static gboolean
 update_dns (NMDnsManager *self,
             gboolean no_caching,
@@ -983,7 +975,6 @@ update_dns (NMDnsManager *self,
 	global_config = nm_config_data_get_global_dns_config (data);
 
 	/* Update hash with config we're applying */
-	sort_configs (self);
 	compute_hash (self, global_config, priv->hash);
 
 	rc.nameservers = g_ptr_array_new ();
@@ -1221,18 +1212,28 @@ nm_dns_manager_add_ip_config (NMDnsManager *self,
 {
 	NMDnsManagerPrivate *priv;
 	GError *error = NULL;
+	NMDnsIPConfigData *data;
 
 	g_return_val_if_fail (self != NULL, FALSE);
 	g_return_val_if_fail (config != NULL, FALSE);
 
 	priv = NM_DNS_MANAGER_GET_PRIVATE (self);
 
+	if (g_slist_find (priv->configs, config)) {
+		data = ip_config_data_get (config);
+		if (data->type == cfg_type && nm_streq0 (iface, data->iface))
+			return FALSE;
+		priv->configs = g_slist_remove (priv->configs, config);
+	} else
+		g_object_ref (config);
+
 	g_object_set_data_full (G_OBJECT (config), NM_DNS_IP_CONFIG_DATA_TAG,
 	                        ip_config_data_new (cfg_type, iface),
 	                        ip_config_data_destroy);
 
-	if (!g_slist_find (priv->configs, config))
-		priv->configs = g_slist_append (priv->configs, g_object_ref (config));
+	priv->configs = g_slist_insert_sorted (priv->configs,
+	                                       config,
+	                                       ip_config_compare);
 
 	if (!priv->updates_queue && !update_dns (self, FALSE, &error)) {
 		_LOGW ("could not commit DNS changes: %s", error->message);
@@ -1384,7 +1385,6 @@ nm_dns_manager_end_updates (NMDnsManager *self, const char *func)
 	priv = NM_DNS_MANAGER_GET_PRIVATE (self);
 	g_return_if_fail (priv->updates_queue > 0);
 
-	sort_configs (self);
 	compute_hash (self, nm_config_data_get_global_dns_config (nm_config_get_data (priv->config)), new);
 	changed = (memcmp (new, priv->prev_hash, sizeof (new)) != 0) ? TRUE : FALSE;
 	_LOGD ("(%s): DNS configuration %s", func, changed ? "changed" : "did not change");
