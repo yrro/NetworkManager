@@ -110,10 +110,6 @@ NM_DEFINE_SINGLETON_INSTANCE (NMDnsManager);
 /*********************************************************************************************/
 
 typedef struct _NMDnsManagerPrivate {
-	GSList *ip4_vpn_configs;
-	NMIP4Config *ip4_device_config;
-	GSList *ip6_vpn_configs;
-	NMIP6Config *ip6_device_config;
 	GSList *configs;
 	char *hostname;
 	guint updates_queue;
@@ -168,6 +164,66 @@ NM_UTILS_LOOKUP_STR_DEFINE_STATIC (_rc_manager_to_string, NMDnsManagerResolvConf
 	NM_UTILS_LOOKUP_STR_ITEM (NM_DNS_MANAGER_RESOLV_CONF_MAN_RESOLVCONF,     "resolvconf"),
 	NM_UTILS_LOOKUP_STR_ITEM (NM_DNS_MANAGER_RESOLV_CONF_MAN_NETCONFIG,      "netconfig"),
 );
+
+static NMDnsIPConfigData *
+ip_config_data_new (NMDnsIPConfigType type, const char *iface)
+{
+	NMDnsIPConfigData *data;
+
+	data = g_slice_new0 (NMDnsIPConfigData);
+	data->iface = g_strdup (iface);
+	data->type = type;
+
+	return data;
+}
+
+static void
+ip_config_data_destroy (gpointer ptr)
+{
+	NMDnsIPConfigData *data = ptr;
+
+	g_free (data->iface);
+	g_slice_free (NMDnsIPConfigData, data);
+}
+
+static NMDnsIPConfigData *
+ip_config_data_get (gconstpointer config)
+{
+	NMDnsIPConfigData *data;
+
+	g_return_val_if_fail (NM_IS_IP4_CONFIG (config) || NM_IS_IP6_CONFIG (config), NULL);
+	data = g_object_get_data (G_OBJECT (config), NM_DNS_IP_CONFIG_DATA_TAG);
+	g_return_val_if_fail (data, NULL);
+
+	return data;
+}
+
+static gint
+ip_config_compare (gconstpointer a, gconstpointer b)
+{
+	const NMDnsIPConfigData *a_data, *b_data;
+	gboolean a_v4, b_v4;
+
+	/* First VPNs, then best devices, then others */
+	a_data = ip_config_data_get (a);
+	b_data = ip_config_data_get (b);
+
+	if (a_data->type > b_data->type)
+		return -1;
+	else if (a_data->type < b_data->type)
+		return 1;
+
+	/* First IPv4, then IPv6 */
+	a_v4 = NM_IS_IP4_CONFIG (a);
+	b_v4 = NM_IS_IP4_CONFIG (b);
+
+	if (a_v4 > b_v4)
+		return -1;
+	else if (a_v4 < b_v4)
+		return 1;
+
+	return 0;
+}
 
 static void
 add_string_item (GPtrArray *array, const char *str)
@@ -258,7 +314,7 @@ merge_one_ip6_config (NMResolvConfData *rc, NMIP6Config *src)
 	guint32 num, num_domains, num_searches, i;
 	const char *iface;
 
-	iface = g_object_get_data (G_OBJECT (src), IP_CONFIG_IFACE_TAG);
+	iface = ip_config_data_get (src)->iface;
 
 	num = nm_ip6_config_get_num_nameservers (src);
 	for (i = 0; i < num; i++) {
@@ -310,6 +366,17 @@ merge_one_ip6_config (NMResolvConfData *rc, NMIP6Config *src)
 		option = nm_ip6_config_get_dns_option (src, i);
 		add_dns_option_item (rc->options, option, TRUE);
 	}
+}
+
+static void
+merge_one_ip_config (NMResolvConfData *rc, gpointer src)
+{
+	if (NM_IS_IP4_CONFIG (src))
+		merge_one_ip4_config (rc, (NMIP4Config *) src);
+	else if (NM_IS_IP6_CONFIG (src))
+		merge_one_ip6_config (rc, (NMIP6Config *) src);
+	else
+		g_return_if_reached ();
 }
 
 static GPid
@@ -788,27 +855,13 @@ compute_hash (NMDnsManager *self, const NMGlobalDnsConfig *global, guint8 buffer
 
 	if (global)
 		nm_global_dns_config_update_checksum (global, sum);
-
-	for (iter = priv->ip4_vpn_configs; iter; iter = g_slist_next (iter))
-		nm_ip4_config_hash (iter->data, sum, TRUE);
-	if (priv->ip4_device_config)
-		nm_ip4_config_hash (priv->ip4_device_config, sum, TRUE);
-
-	for (iter = priv->ip6_vpn_configs; iter; iter = g_slist_next (iter))
-		nm_ip6_config_hash (iter->data, sum, TRUE);
-	if (priv->ip6_device_config)
-		nm_ip6_config_hash (priv->ip6_device_config, sum, TRUE);
-
-	/* add any other configs we know about */
-	for (iter = priv->configs; iter; iter = g_slist_next (iter)) {
-		if (NM_IN_SET (iter->data, priv->ip4_device_config,
-		                           priv->ip6_device_config))
-			continue;
-
-		if (NM_IS_IP4_CONFIG (iter->data))
-			nm_ip4_config_hash (NM_IP4_CONFIG (iter->data), sum, TRUE);
-		else if (NM_IS_IP6_CONFIG (iter->data))
-			nm_ip6_config_hash (NM_IP6_CONFIG (iter->data), sum, TRUE);
+	else {
+		for (iter = priv->configs; iter; iter = g_slist_next (iter)) {
+			if (NM_IS_IP4_CONFIG (iter->data))
+				nm_ip4_config_hash (NM_IP4_CONFIG (iter->data), sum, TRUE);
+			else if (NM_IS_IP6_CONFIG (iter->data))
+				nm_ip6_config_hash (NM_IP6_CONFIG (iter->data), sum, TRUE);
+		}
 	}
 
 	g_checksum_get_digest (sum, buffer, &len);
@@ -833,19 +886,22 @@ build_plugin_config_lists (NMDnsManager *self,
 	 * still use the domain information in each config to provide split DNS if
 	 * they want to.
 	 */
-	for (iter = priv->ip4_vpn_configs; iter; iter = g_slist_next (iter))
-		*out_vpn_configs = g_slist_append (*out_vpn_configs, iter->data);
-	for (iter = priv->ip6_vpn_configs; iter; iter = g_slist_next (iter))
-		*out_vpn_configs = g_slist_append (*out_vpn_configs, iter->data);
-	if (priv->ip4_device_config)
-		*out_dev_configs = g_slist_append (*out_dev_configs, priv->ip4_device_config);
-	if (priv->ip6_device_config)
-		*out_dev_configs = g_slist_append (*out_dev_configs, priv->ip6_device_config);
-
 	for (iter = priv->configs; iter; iter = g_slist_next (iter)) {
-		if (!NM_IN_SET (iter->data, priv->ip4_device_config,
-		                            priv->ip6_device_config))
+		NMDnsIPConfigData *data = ip_config_data_get (iter->data);
+
+		switch (data->type) {
+		case NM_DNS_IP_CONFIG_TYPE_VPN:
+			*out_vpn_configs = g_slist_append (*out_vpn_configs, iter->data);
+			break;
+		case NM_DNS_IP_CONFIG_TYPE_BEST_DEVICE:
+			*out_dev_configs = g_slist_append (*out_dev_configs, iter->data);
+			break;
+		case NM_DNS_IP_CONFIG_TYPE_DEFAULT:
 			*out_other_configs = g_slist_append (*out_other_configs, iter->data);
+			break;
+		default:
+			g_return_if_reached ();
+		}
 	}
 }
 
@@ -879,6 +935,14 @@ merge_global_dns_config (NMResolvConfData *rc, NMGlobalDnsConfig *global_conf)
 		add_string_item (rc->nameservers, servers[i]);
 
 	return TRUE;
+}
+
+static void
+sort_configs (NMDnsManager *self)
+{
+	NMDnsManagerPrivate *priv = NM_DNS_MANAGER_GET_PRIVATE (self);
+
+	priv->configs = g_slist_sort (priv->configs, ip_config_compare);
 }
 
 static gboolean
@@ -919,6 +983,7 @@ update_dns (NMDnsManager *self,
 	global_config = nm_config_data_get_global_dns_config (data);
 
 	/* Update hash with config we're applying */
+	sort_configs (self);
 	compute_hash (self, global_config, priv->hash);
 
 	rc.nameservers = g_ptr_array_new ();
@@ -930,32 +995,8 @@ update_dns (NMDnsManager *self,
 	if (global_config)
 		merge_global_dns_config (&rc, global_config);
 	else {
-		for (iter = priv->ip4_vpn_configs; iter; iter = g_slist_next (iter))
-			merge_one_ip4_config (&rc, iter->data);
-		if (priv->ip4_device_config)
-			merge_one_ip4_config (&rc, priv->ip4_device_config);
-
-		for (iter = priv->ip6_vpn_configs; iter; iter = g_slist_next (iter))
-			merge_one_ip6_config (&rc, iter->data);
-		if (priv->ip6_device_config)
-			merge_one_ip6_config (&rc, priv->ip6_device_config);
-
-		for (iter = priv->configs; iter; iter = g_slist_next (iter)) {
-			if (NM_IN_SET (iter->data, priv->ip4_device_config,
-			                           priv->ip6_device_config))
-				continue;
-
-			if (NM_IS_IP4_CONFIG (iter->data)) {
-				NMIP4Config *config = NM_IP4_CONFIG (iter->data);
-
-				merge_one_ip4_config (&rc, config);
-			} else if (NM_IS_IP6_CONFIG (iter->data)) {
-				NMIP6Config *config = NM_IP6_CONFIG (iter->data);
-
-				merge_one_ip6_config (&rc, config);
-			} else
-				g_assert_not_reached ();
-		}
+		for (iter = priv->configs; iter; iter = g_slist_next (iter))
+			merge_one_ip_config (&rc, iter->data);
 	}
 
 	/* If the hostname is a FQDN ("dcbw.example.com"), then add the domain part of it
@@ -1172,11 +1213,11 @@ plugin_child_quit (NMDnsPlugin *plugin, int exit_status, gpointer user_data)
 	plugin_child_quit_update_dns (self);
 }
 
-gboolean
-nm_dns_manager_add_ip4_config (NMDnsManager *self,
-                               const char *iface,
-                               NMIP4Config *config,
-                               NMDnsIPConfigType cfg_type)
+static gboolean
+nm_dns_manager_add_ip_config (NMDnsManager *self,
+                              const char *iface,
+                              gpointer config,
+                              NMDnsIPConfigType cfg_type)
 {
 	NMDnsManagerPrivate *priv;
 	GError *error = NULL;
@@ -1186,25 +1227,57 @@ nm_dns_manager_add_ip4_config (NMDnsManager *self,
 
 	priv = NM_DNS_MANAGER_GET_PRIVATE (self);
 
-	g_object_set_data_full (G_OBJECT (config), IP_CONFIG_IFACE_TAG, g_strdup (iface), g_free);
+	g_object_set_data_full (G_OBJECT (config), NM_DNS_IP_CONFIG_DATA_TAG,
+	                        ip_config_data_new (cfg_type, iface),
+	                        ip_config_data_destroy);
 
-	switch (cfg_type) {
-	case NM_DNS_IP_CONFIG_TYPE_VPN:
-		if (!g_slist_find (priv->ip4_vpn_configs, config)) {
-			priv->ip4_vpn_configs = g_slist_append (priv->ip4_vpn_configs,
-			                                        g_object_ref (config));
-		}
-		break;
-	case NM_DNS_IP_CONFIG_TYPE_BEST_DEVICE:
-		priv->ip4_device_config = config;
-		/* Fall through */
-	case NM_DNS_IP_CONFIG_TYPE_DEFAULT:
-		if (!g_slist_find (priv->configs, config))
-			priv->configs = g_slist_append (priv->configs, g_object_ref (config));
-		break;
-	default:
-		g_return_val_if_reached (FALSE);
+	if (!g_slist_find (priv->configs, config))
+		priv->configs = g_slist_append (priv->configs, g_object_ref (config));
+
+	if (!priv->updates_queue && !update_dns (self, FALSE, &error)) {
+		_LOGW ("could not commit DNS changes: %s", error->message);
+		g_clear_error (&error);
 	}
+
+	return TRUE;
+}
+
+gboolean
+nm_dns_manager_add_ip4_config (NMDnsManager *self,
+                               const char *iface,
+                               NMIP4Config *config,
+                               NMDnsIPConfigType cfg_type)
+{
+	return nm_dns_manager_add_ip_config (self, iface, config, cfg_type);
+}
+
+gboolean
+nm_dns_manager_add_ip6_config (NMDnsManager *self,
+                               const char *iface,
+                               NMIP6Config *config,
+                               NMDnsIPConfigType cfg_type)
+{
+	return nm_dns_manager_add_ip_config (self, iface, config, cfg_type);
+}
+
+static gboolean
+nm_dns_manager_remove_ip_config (NMDnsManager *self, gpointer config)
+{
+	NMDnsManagerPrivate *priv;
+	GError *error = NULL;
+
+	g_return_val_if_fail (self != NULL, FALSE);
+	g_return_val_if_fail (config != NULL, FALSE);
+
+	priv = NM_DNS_MANAGER_GET_PRIVATE (self);
+
+	if (g_slist_find (priv->configs, config))
+		priv->configs = g_slist_remove (priv->configs, config);
+	else
+		return FALSE;
+
+	g_object_set_data (G_OBJECT (config), NM_DNS_IP_CONFIG_DATA_TAG, NULL);
+	g_object_unref (config);
 
 	if (!priv->updates_queue && !update_dns (self, FALSE, &error)) {
 		_LOGW ("could not commit DNS changes: %s", error->message);
@@ -1217,107 +1290,13 @@ nm_dns_manager_add_ip4_config (NMDnsManager *self,
 gboolean
 nm_dns_manager_remove_ip4_config (NMDnsManager *self, NMIP4Config *config)
 {
-	NMDnsManagerPrivate *priv;
-	GError *error = NULL;
-
-	g_return_val_if_fail (self != NULL, FALSE);
-	g_return_val_if_fail (config != NULL, FALSE);
-
-	priv = NM_DNS_MANAGER_GET_PRIVATE (self);
-
-	if (g_slist_find (priv->configs, config)) {
-		priv->configs = g_slist_remove (priv->configs, config);
-		if (config == priv->ip4_device_config)
-			priv->ip4_device_config = NULL;
-	} else if (g_slist_find (priv->ip4_vpn_configs, config))
-		priv->ip4_vpn_configs = g_slist_remove (priv->ip4_vpn_configs, config);
-	else
-		return FALSE;
-
-	g_object_unref (config);
-
-	if (!priv->updates_queue && !update_dns (self, FALSE, &error)) {
-		_LOGW ("could not commit DNS changes: %s", error->message);
-		g_clear_error (&error);
-	}
-
-	g_object_set_data (G_OBJECT (config), IP_CONFIG_IFACE_TAG, NULL);
-
-	return TRUE;
-}
-
-gboolean
-nm_dns_manager_add_ip6_config (NMDnsManager *self,
-                               const char *iface,
-                               NMIP6Config *config,
-                               NMDnsIPConfigType cfg_type)
-{
-	NMDnsManagerPrivate *priv;
-	GError *error = NULL;
-
-	g_return_val_if_fail (self != NULL, FALSE);
-	g_return_val_if_fail (config != NULL, FALSE);
-
-	priv = NM_DNS_MANAGER_GET_PRIVATE (self);
-
-	g_object_set_data_full (G_OBJECT (config), IP_CONFIG_IFACE_TAG, g_strdup (iface), g_free);
-
-	switch (cfg_type) {
-	case NM_DNS_IP_CONFIG_TYPE_VPN:
-		if (!g_slist_find (priv->ip6_vpn_configs, config)) {
-			priv->ip6_vpn_configs = g_slist_append (priv->ip6_vpn_configs,
-			                                        g_object_ref (config));
-		}
-		break;
-	case NM_DNS_IP_CONFIG_TYPE_BEST_DEVICE:
-		priv->ip6_device_config = config;
-		/* Fall through */
-	case NM_DNS_IP_CONFIG_TYPE_DEFAULT:
-		if (!g_slist_find (priv->configs, config))
-			priv->configs = g_slist_append (priv->configs, g_object_ref (config));
-		break;
-	default:
-		g_return_val_if_reached (FALSE);
-	}
-
-	if (!priv->updates_queue && !update_dns (self, FALSE, &error)) {
-		_LOGW ("could not commit DNS changes: %s", error->message);
-		g_clear_error (&error);
-	}
-
-	return TRUE;
+	return nm_dns_manager_remove_ip_config (self, config);
 }
 
 gboolean
 nm_dns_manager_remove_ip6_config (NMDnsManager *self, NMIP6Config *config)
 {
-	NMDnsManagerPrivate *priv;
-	GError *error = NULL;
-
-	g_return_val_if_fail (self != NULL, FALSE);
-	g_return_val_if_fail (config != NULL, FALSE);
-
-	priv = NM_DNS_MANAGER_GET_PRIVATE (self);
-
-	if (g_slist_find (priv->configs, config)) {
-		priv->configs = g_slist_remove (priv->configs, config);
-		if (config == priv->ip6_device_config)
-			priv->ip6_device_config = NULL;
-	} else if (g_slist_find (priv->ip6_vpn_configs, config))
-		priv->ip6_vpn_configs = g_slist_remove (priv->ip6_vpn_configs, config);
-	else
-		return FALSE;
-
-	g_object_unref (config);
-
-	if (!priv->updates_queue && !update_dns (self, FALSE, &error)) {
-		_LOGW ("could not commit DNS changes: %s", error->message);
-		g_clear_error (&error);
-	}
-
-	g_object_set_data (G_OBJECT (config), IP_CONFIG_IFACE_TAG, NULL);
-
-	return TRUE;
+	return nm_dns_manager_remove_ip_config (self, config);
 }
 
 void
@@ -1405,6 +1384,7 @@ nm_dns_manager_end_updates (NMDnsManager *self, const char *func)
 	priv = NM_DNS_MANAGER_GET_PRIVATE (self);
 	g_return_if_fail (priv->updates_queue > 0);
 
+	sort_configs (self);
 	compute_hash (self, nm_config_data_get_global_dns_config (nm_config_get_data (priv->config)), new);
 	changed = (memcmp (new, priv->prev_hash, sizeof (new)) != 0) ? TRUE : FALSE;
 	_LOGD ("(%s): DNS configuration %s", func, changed ? "changed" : "did not change");
@@ -1632,10 +1612,6 @@ dispose (GObject *object)
 
 	g_slist_free_full (priv->configs, g_object_unref);
 	priv->configs = NULL;
-	g_slist_free_full (priv->ip4_vpn_configs, g_object_unref);
-	priv->ip4_vpn_configs = NULL;
-	g_slist_free_full (priv->ip6_vpn_configs, g_object_unref);
-	priv->ip6_vpn_configs = NULL;
 
 	G_OBJECT_CLASS (nm_dns_manager_parent_class)->dispose (object);
 }

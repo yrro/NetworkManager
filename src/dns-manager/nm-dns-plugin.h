@@ -33,8 +33,6 @@
 #define NM_DNS_PLUGIN_FAILED "failed"
 #define NM_DNS_PLUGIN_CHILD_QUIT "child-quit"
 
-#define IP_CONFIG_IFACE_TAG "dns-manager-iface"
-
 typedef struct {
 	GObject parent;
 } NMDnsPlugin;

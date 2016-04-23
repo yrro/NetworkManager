@@ -28,6 +28,7 @@
 #include <sys/stat.h>
 
 #include "nm-dns-dnsmasq.h"
+#include "nm-dns-manager.h"
 #include "nm-utils.h"
 #include "nm-ip4-config.h"
 #include "nm-ip6-config.h"
@@ -208,12 +209,13 @@ add_ip6_config (NMDnsDnsmasq *self, GVariantBuilder *servers, NMIP6Config *ip6, 
 	char *buf = NULL;
 	int nnameservers, i_nameserver, n, i;
 	gboolean added = FALSE;
-	const char *iface;
+	NMDnsIPConfigData *data;
 
 	nnameservers = nm_ip6_config_get_num_nameservers (ip6);
 
-	iface = g_object_get_data (G_OBJECT (ip6), IP_CONFIG_IFACE_TAG);
-	g_assert (iface);
+	data = g_object_get_data (G_OBJECT (ip6), NM_DNS_IP_CONFIG_DATA_TAG);
+	g_return_val_if_fail (data, FALSE);
+	g_return_val_if_fail (data->iface, FALSE);
 
 	if (split) {
 		if (nnameservers == 0)
@@ -221,7 +223,7 @@ add_ip6_config (NMDnsDnsmasq *self, GVariantBuilder *servers, NMIP6Config *ip6, 
 
 		for (i_nameserver = 0; i_nameserver < nnameservers; i_nameserver++) {
 			addr = nm_ip6_config_get_nameserver (ip6, i_nameserver);
-			buf = ip6_addr_to_string (addr, iface);
+			buf = ip6_addr_to_string (addr, data->iface);
 
 			/* searches are preferred over domains */
 			n = nm_ip6_config_get_num_searches (ip6);
@@ -253,7 +255,7 @@ add_ip6_config (NMDnsDnsmasq *self, GVariantBuilder *servers, NMIP6Config *ip6, 
 	if (!added) {
 		for (i = 0; i < nnameservers; i++) {
 			addr = nm_ip6_config_get_nameserver (ip6, i);
-			buf = ip6_addr_to_string (addr, iface);
+			buf = ip6_addr_to_string (addr, data->iface);
 			if (buf) {
 				add_dnsmasq_nameserver (self, servers, buf, NULL);
 				g_free (buf);

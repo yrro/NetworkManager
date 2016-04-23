@@ -34,6 +34,13 @@ typedef enum {
 	NM_DNS_IP_CONFIG_TYPE_VPN
 } NMDnsIPConfigType;
 
+typedef struct {
+	NMDnsIPConfigType type;
+	char *iface;
+} NMDnsIPConfigData;
+
+#define NM_DNS_IP_CONFIG_DATA_TAG "nm-dns-ip-config-data"
+
 G_BEGIN_DECLS
 
 #define NM_TYPE_DNS_MANAGER (nm_dns_manager_get_type ())
