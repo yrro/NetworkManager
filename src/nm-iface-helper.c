@@ -349,8 +349,6 @@ main (int argc, char *argv[])
 	gs_free NMUtilsIPv6IfaceId *iid = NULL;
 	guint sd_id;
 
-	nm_g_type_init ();
-
 	setpgid (getpid (), getpid ());
 
 	do_early_setup (&argc, &argv);

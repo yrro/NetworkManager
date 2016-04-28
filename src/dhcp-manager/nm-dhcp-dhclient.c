@@ -665,7 +665,6 @@ nm_dhcp_dhclient_class_init (NMDhcpDhclientClass *dhclient_class)
 static void __attribute__((constructor))
 register_dhcp_dhclient (void)
 {
-	nm_g_type_init ();
 	_nm_dhcp_client_register (NM_TYPE_DHCP_DHCLIENT,
 	                          "dhclient",
 	                          nm_dhcp_dhclient_get_path,

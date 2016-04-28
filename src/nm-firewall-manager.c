@@ -162,7 +162,7 @@ _cb_info_create (NMFirewallManager *self,
 	} else
 		info->mode = CB_INFO_MODE_IDLE;
 
-	if (!nm_g_hash_table_add (priv->pending_calls, info))
+	if (!g_hash_table_add (priv->pending_calls, info))
 		g_return_val_if_reached (NULL);
 
 	return info;

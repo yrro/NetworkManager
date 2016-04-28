@@ -9729,7 +9729,7 @@ available_connections_del_all (NMDevice *self)
 static gboolean
 available_connections_add (NMDevice *self, NMConnection *connection)
 {
-	return nm_g_hash_table_add (self->priv->available_connections, g_object_ref (connection));
+	return g_hash_table_add (self->priv->available_connections, g_object_ref (connection));
 }
 
 static gboolean

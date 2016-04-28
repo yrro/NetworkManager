@@ -1406,7 +1406,7 @@ device_added (NMManager *manager, NMDevice *device, gpointer user_data)
 
 	priv = NM_POLICY_GET_PRIVATE (self);
 
-	if (!nm_g_hash_table_add (priv->devices, device))
+	if (!g_hash_table_add (priv->devices, device))
 		g_return_if_reached ();
 
 	devices_list_register (self, device);

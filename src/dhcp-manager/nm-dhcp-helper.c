@@ -95,8 +95,6 @@ main (int argc, char *argv[])
 	GDBusConnection *connection;
 	GError *error = NULL;
 
-	nm_g_type_init ();
-
 	connection = g_dbus_connection_new_for_address_sync ("unix:path=" NMRUNDIR "/private-dhcp",
 	                                                     G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT,
 	                                                     NULL, NULL, &error);

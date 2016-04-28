@@ -1615,7 +1615,7 @@ _nmp_cache_update_add (NMPCache *cache, NMPObject *obj)
 	nm_assert (!obj->is_cached);
 	nmp_object_ref (obj);
 	nm_assert (!nm_multi_index_lookup_first_by_value (cache->idx_multi, &obj->object));
-	if (!nm_g_hash_table_add (cache->idx_main, obj))
+	if (!g_hash_table_add (cache->idx_main, obj))
 		g_assert_not_reached ();
 	obj->is_cached = TRUE;
 	_nmp_cache_update_cache (cache, obj, FALSE);

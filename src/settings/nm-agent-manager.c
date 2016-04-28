@@ -1236,7 +1236,7 @@ nm_agent_manager_get_secrets (NMAgentManager *self,
 	req->con.get.callback = callback;
 	req->con.get.callback_data = callback_data;
 
-	if (!nm_g_hash_table_add (priv->requests, req))
+	if (!g_hash_table_add (priv->requests, req))
 		g_assert_not_reached ();
 
 	/* Kick off the request */
@@ -1342,7 +1342,7 @@ nm_agent_manager_save_secrets (NMAgentManager *self,
 	                   subject);
 	req->con.path = g_strdup (path);
 	req->con.connection = g_object_ref (connection);
-	if (!nm_g_hash_table_add (priv->requests, req))
+	if (!g_hash_table_add (priv->requests, req))
 		g_assert_not_reached ();
 
 	/* Kick off the request */
@@ -1430,7 +1430,7 @@ nm_agent_manager_delete_secrets (NMAgentManager *self,
 	req->con.path = g_strdup (path);
 	req->con.connection = g_object_ref (connection);
 	g_object_unref (subject);
-	if (!nm_g_hash_table_add (priv->requests, req))
+	if (!g_hash_table_add (priv->requests, req))
 		g_assert_not_reached ();
 
 	/* Kick off the request */

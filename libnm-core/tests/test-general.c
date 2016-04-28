@@ -4584,31 +4584,6 @@ again:
 /******************************************************************************/
 
 static void
-test_g_ptr_array_insert (void)
-{
-	/* this test only makes sense on a recent glib, where we compare our compat
-	 * with the original implementation. */
-#if GLIB_CHECK_VERSION(2, 40, 0)
-	gs_unref_ptrarray GPtrArray *arr1 = g_ptr_array_new ();
-	gs_unref_ptrarray GPtrArray *arr2 = g_ptr_array_new ();
-	GRand *rand = nmtst_get_rand ();
-	guint i;
-
-	for (i = 0; i < 560; i++) {
-		gint32 idx = g_rand_int_range (rand, -1, arr1->len + 1);
-
-		g_ptr_array_insert (arr1, idx, GINT_TO_POINTER (i));
-		_nm_g_ptr_array_insert (arr2, idx, GINT_TO_POINTER (i));
-
-		g_assert_cmpint (arr1->len, ==, arr2->len);
-		g_assert (memcmp (arr1->pdata, arr2->pdata, arr1->len * sizeof (gpointer)) == 0);
-	}
-#endif
-}
-
-/******************************************************************************/
-
-static void
 test_g_hash_table_get_keys_as_array (void)
 {
 	GHashTable *table = g_hash_table_new (g_str_hash, g_str_equal);
@@ -4619,7 +4594,7 @@ test_g_hash_table_get_keys_as_array (void)
 	g_hash_table_insert (table, "two",   "2");
 	g_hash_table_insert (table, "three", "3");
 
-	keys = (char **) _nm_g_hash_table_get_keys_as_array (table, &length);
+	keys = (char **) g_hash_table_get_keys_as_array (table, &length);
 	g_assert (keys);
 	g_assert_cmpuint (length, ==, 3);
 
@@ -5163,7 +5138,6 @@ int main (int argc, char **argv)
 
 	g_test_add_func ("/core/general/_nm_utils_ascii_str_to_int64", test_nm_utils_ascii_str_to_int64);
 	g_test_add_func ("/core/general/nm_utils_is_power_of_two", test_nm_utils_is_power_of_two);
-	g_test_add_func ("/core/general/_glib_compat_g_ptr_array_insert", test_g_ptr_array_insert);
 	g_test_add_func ("/core/general/_glib_compat_g_hash_table_get_keys_as_array", test_g_hash_table_get_keys_as_array);
 	g_test_add_func ("/core/general/_nm_utils_ptrarray_find_binary_search", test_nm_utils_ptrarray_find_binary_search);
 	g_test_add_func ("/core/general/_nm_utils_strstrdictkey", test_nm_utils_strstrdictkey);

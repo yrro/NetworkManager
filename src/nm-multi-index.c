@@ -322,7 +322,7 @@ _do_add (NMMultiIndex *index,
 			g_hash_table_replace (values_data->index, values_data->value0, values_data->value0);
 			values_data->values = NULL;
 		} else {
-			if (!nm_g_hash_table_replace (values_data->index, (gpointer) value, (gpointer) value))
+			if (!g_hash_table_replace (values_data->index, (gpointer) value, (gpointer) value))
 				return FALSE;
 			g_clear_pointer (&values_data->values, g_free);
 		}

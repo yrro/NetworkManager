@@ -186,8 +186,6 @@ main (int argc, char *argv[])
 	}
 	remaining_ms = t_secs * 1000;
 
-	nm_g_type_init ();
-
 	client = nm_client_new (NULL, &error);
 	if (!client) {
 		g_printerr (_("Error: Could not create NMClient object: %s."), error->message);
