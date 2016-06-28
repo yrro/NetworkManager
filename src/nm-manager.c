@@ -2587,6 +2587,9 @@ ensure_master_active_connection (NMManager *self,
 				if (!is_compatible_with_slave (NM_CONNECTION (candidate), connection))
 					continue;
 
+				if (nm_settings_connection_get_autoconnect_retries (candidate) == 0)
+					continue;
+
 				if (nm_device_check_connection_available (master_device, NM_CONNECTION (candidate), NM_DEVICE_CHECK_CON_AVAILABLE_FOR_USER_REQUEST, NULL)) {
 					master_ac = nm_manager_activate_connection (self,
 					                                            candidate,
