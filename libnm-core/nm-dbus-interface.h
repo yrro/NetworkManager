@@ -689,4 +689,20 @@ typedef enum {
 	NM_IP_TUNNEL_MODE_VTI6        = 9,
 } NMIPTunnelMode;
 
+
+/**
+ * NMCheckpointCreateFlags:
+ * @NM_CHECKPOINT_CREATE_FLAG_NONE: no flags
+ * @NM_CHECKPOINT_CREATE_FLAG_DESTROY_ALL: when creating
+ *   a new checkpoint, destroy all existing ones.
+ *
+ * The flags for CheckpointCreate call
+ *
+ * Since: 1.4
+ */
+typedef enum { /*< skip >*/
+	NM_CHECKPOINT_CREATE_FLAG_NONE              = 0,
+	NM_CHECKPOINT_CREATE_FLAG_DESTROY_ALL       = 0x01,
+} NMCheckpointCreateFlags;
+
 #endif /* __NM_DBUS_INTERFACE_H__ */

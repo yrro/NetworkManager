@@ -206,6 +206,46 @@
     </method>
 
     <!--
+        CheckpointCreate:
+
+        @devices: a list of device paths for which a checkpoint should be created. An empty list means all managed devices.
+        @rollback_timeout: the time in seconds until NetworkManager will automatically rollback to the checkpoint. Set to zero for infinite.
+        @flags: optional flags that influence the creation
+        @checkpoint_id: on success, returns the ID of the checkpoint. This ID can be used to rollback or destroy the checkpoint later.
+
+        Create a checkpoint of the current networking configuration
+        for given interfaces. If @rollback_timeout is not zero, a
+        rollback is automatically performed after the given timeout.
+    -->
+    <method name="CheckpointCreate">
+      <arg name="devices" type="ao" direction="in"/>
+      <arg name="rollback_timeout" type="u" direction="in"/>
+      <arg name="flags" type="u" direction="in"/>
+
+      <arg name="checkpoint_id" type="s" direction="out"/>
+    </method>
+
+    <!--
+        CheckpointDestroy:
+        @checkpoint_id: ID of the checkpoint. Set to an empty string to cancel all pending checkpoints.
+
+        Destroy a previously created checkpoint.
+    -->
+    <method name="CheckpointDestroy">
+      <arg name="checkpoint_id" type="s" direction="in"/>
+    </method>
+
+    <!--
+        CheckpointRollback:
+        @checkpoint_id: ID of the checkpoint.
+
+        Rollback a checkpoint before the timeout is reached.
+    -->
+    <method name="CheckpointRollback">
+      <arg name="checkpoint_id" type="s" direction="in"/>
+    </method>
+
+    <!--
         Devices:
 
         The list of realized network devices. Realized devices are those which
