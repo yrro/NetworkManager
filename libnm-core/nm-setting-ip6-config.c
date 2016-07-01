@@ -262,6 +262,17 @@ verify (NMSetting *setting, NMConnection *connection, GError **error)
 		return NM_SETTING_VERIFY_NORMALIZABLE_ERROR;
 	}
 
+
+	if (   !strcmp (method, NM_SETTING_IP6_CONFIG_METHOD_IGNORE)
+	    && !nm_setting_ip_config_get_may_fail (s_ip)) {
+		g_set_error_literal (error,
+		                     NM_CONNECTION_ERROR,
+		                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
+		                     _("property cannot be TRUE when method is set to ignore"));
+		g_prefix_error (error, "%s.%s: ", NM_SETTING_IP6_CONFIG_SETTING_NAME, NM_SETTING_IP_CONFIG_MAY_FAIL);
+		return NM_SETTING_VERIFY_NORMALIZABLE_ERROR;
+	}
+
 	return TRUE;
 }
 
