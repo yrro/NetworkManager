@@ -463,6 +463,64 @@ _nm_setting_bond_get_option_type (NMSettingBond *setting, const char *name)
 	g_assert_not_reached ();
 }
 
+NMBondMode
+_nm_setting_bond_mode_from_string (const char *str)
+{
+	g_return_val_if_fail (str, NM_BOND_MODE_UNKNOWN);
+
+	if (nm_streq (str, "balance-rr"))
+		return NM_BOND_MODE_ROUNDROBIN;
+	if (nm_streq (str, "active-backup"))
+		return NM_BOND_MODE_ACTIVEBACKUP;
+	if (nm_streq (str, "balance-xor"))
+		return NM_BOND_MODE_XOR;
+	if (nm_streq (str, "broadcast"))
+		return NM_BOND_MODE_BROADCAST;
+	if (nm_streq (str, "802.3ad"))
+		return NM_BOND_MODE_8023AD;
+	if (nm_streq (str, "balance-tlb"))
+		return NM_BOND_MODE_TLB;
+	if (nm_streq (str, "balance-alb"))
+		return NM_BOND_MODE_ALB;
+
+	return NM_BOND_MODE_UNKNOWN;
+}
+
+#define BIT(x) (1 << (x))
+#define _ENTRY(name, modes) \
+	{ NM_SETTING_BOND_OPTION_ ## name, modes }
+
+struct {
+	const char *option;
+	NMBondMode unsupp_modes;
+} bond_unsupp_modes[] = {
+	_ENTRY (PACKETS_PER_SLAVE, ~(BIT (NM_BOND_MODE_ROUNDROBIN))),
+	_ENTRY (ARP_VALIDATE,      BIT (NM_BOND_MODE_8023AD) | BIT (NM_BOND_MODE_TLB) | BIT (NM_BOND_MODE_ALB)),
+	_ENTRY (ARP_INTERVAL,      BIT (NM_BOND_MODE_8023AD) | BIT (NM_BOND_MODE_TLB) | BIT (NM_BOND_MODE_ALB)),
+	_ENTRY (LACP_RATE,         ~(BIT (NM_BOND_MODE_8023AD))),
+	_ENTRY (PRIMARY,           ~(BIT (NM_BOND_MODE_ACTIVEBACKUP) | BIT (NM_BOND_MODE_TLB) | BIT (NM_BOND_MODE_ALB))),
+	_ENTRY (ACTIVE_SLAVE,      ~(BIT (NM_BOND_MODE_ACTIVEBACKUP) | BIT (NM_BOND_MODE_TLB) | BIT (NM_BOND_MODE_ALB))),
+	_ENTRY (TLB_DYNAMIC_LB,    ~(BIT (NM_BOND_MODE_TLB))),
+	_ENTRY (AD_ACTOR_SYS_PRIO, ~(BIT (NM_BOND_MODE_8023AD))),
+	_ENTRY (AD_ACTOR_SYSTEM,   ~(BIT (NM_BOND_MODE_8023AD))),
+	_ENTRY (AD_USER_PORT_KEY,  ~(BIT (NM_BOND_MODE_8023AD))),
+};
+
+#undef _ENTRY
+
+gboolean
+_nm_setting_bond_option_supported (const char *option, NMBondMode mode)
+{
+	guint i;
+
+	for (i = 0; i < G_N_ELEMENTS (bond_unsupp_modes); i++) {
+		if (nm_streq (option, bond_unsupp_modes[i].option))
+		    return !NM_FLAGS_HAS (bond_unsupp_modes[i].unsupp_modes, BIT (mode));
+	}
+
+	return TRUE;
+}
+
 static gboolean
 verify (NMSetting *setting, NMConnection *connection, GError **error)
 {

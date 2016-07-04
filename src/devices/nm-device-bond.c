@@ -42,6 +42,7 @@ G_DEFINE_TYPE (NMDeviceBond, nm_device_bond, NM_TYPE_DEVICE)
 #define NM_DEVICE_BOND_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), NM_TYPE_DEVICE_BOND, NMDeviceBondPrivate))
 
 typedef struct {
+	NMBondMode mode;
 	int dummy;
 } NMDeviceBondPrivate;
 
@@ -121,8 +122,14 @@ static gboolean
 set_bond_attr (NMDevice *device, const char *attr, const char *value)
 {
 	NMDeviceBond *self = NM_DEVICE_BOND (device);
+	NMDeviceBondPrivate *priv = NM_DEVICE_BOND_GET_PRIVATE (self);
 	gboolean ret;
 	int ifindex = nm_device_get_ifindex (device);
+
+	g_return_val_if_fail (priv->mode != NM_BOND_MODE_UNKNOWN, FALSE);
+
+	if (!_nm_setting_bond_option_supported (attr, priv->mode))
+		return FALSE;
 
 	ret = nm_platform_sysctl_master_set_option (NM_PLATFORM_GET, ifindex, attr, value);
 	if (!ret)
@@ -238,12 +245,15 @@ set_simple_option (NMDevice *device,
 static NMActStageReturn
 apply_bonding_config (NMDevice *device)
 {
+	NMDeviceBond *self = NM_DEVICE_BOND (device);
+	NMDeviceBondPrivate *priv = NM_DEVICE_BOND_GET_PRIVATE (self);
 	NMConnection *connection;
 	NMSettingBond *s_bond;
 	int ifindex = nm_device_get_ifindex (device);
-	const char *mode, *value;
+	const char *mode_str, *value;
 	char *contents;
 	gboolean set_arp_interval = TRUE;
+	NMBondMode mode;
 
 	/* Option restrictions:
 	 *
@@ -263,9 +273,22 @@ apply_bonding_config (NMDevice *device)
 	s_bond = nm_connection_get_setting_bond (connection);
 	g_assert (s_bond);
 
-	mode = nm_setting_bond_get_option_by_name (s_bond, NM_SETTING_BOND_OPTION_MODE);
-	if (mode == NULL)
-		mode = "balance-rr";
+	mode_str = nm_setting_bond_get_option_by_name (s_bond, NM_SETTING_BOND_OPTION_MODE);
+	if (!mode_str)
+		mode_str = "balance-rr";
+
+	mode = _nm_setting_bond_mode_from_string (mode_str);
+	if (mode == NM_BOND_MODE_UNKNOWN) {
+		_LOGW (LOGD_BOND, "unknown bond mode '%s'", mode_str);
+		return NM_ACT_STAGE_RETURN_FAILURE;
+	}
+
+	priv->mode = mode;
+
+	/* Set mode first, as some other options (e.g. arp_interval) are valid
+	 * only for certain modes.
+	 */
+	set_bond_attr (device, "mode", mode_str);
 
 	value = nm_setting_bond_get_option_by_name (s_bond, NM_SETTING_BOND_OPTION_MIIMON);
 	if (value && atoi (value)) {
@@ -277,56 +300,39 @@ apply_bonding_config (NMDevice *device)
 		set_simple_option (device, "updelay", s_bond, NM_SETTING_BOND_OPTION_UPDELAY);
 		set_simple_option (device, "downdelay", s_bond, NM_SETTING_BOND_OPTION_DOWNDELAY);
 	} else if (!value) {
-		/* If not given, and arp_interval is not given, default to 100 */
-		long int val_int;
-		char *end;
-
+		/* If not given, and arp_interval is not given or disabled, default to 100 */
 		value = nm_setting_bond_get_option_by_name (s_bond, NM_SETTING_BOND_OPTION_ARP_INTERVAL);
-		errno = 0;
-		val_int = strtol (value ? value : "0", &end, 10);
-		if (!value || (val_int == 0 && errno == 0 && *end == '\0'))
+		if (_nm_utils_ascii_str_to_int64 (value, 10, 0, G_MAXUINT32, 0) == 0)
 			set_bond_attr (device, "miimon", "100");
 	}
 
-	/* The stuff after 'mode' requires the given mode or doesn't care */
-	set_bond_attr (device, "mode", mode);
-
-	/* arp_interval not compatible with ALB, TLB */
-	if (NM_IN_STRSET (mode, "balance-alb", "balance-tlb"))
-		set_arp_interval = FALSE;
-
 	if (set_arp_interval) {
 		set_simple_option (device, "arp_interval", s_bond, NM_SETTING_BOND_OPTION_ARP_INTERVAL);
-
 		/* Just let miimon get cleared automatically; even setting miimon to
 		 * 0 (disabled) clears arp_interval.
 		 */
 	}
 
+	/* ARP validate: value > 0 only valid in active-backup mode */
 	value = nm_setting_bond_get_option_by_name (s_bond, NM_SETTING_BOND_OPTION_ARP_VALIDATE);
-	/* arp_validate > 0 only valid in active-backup mode */
 	if (   value
 	    && !nm_streq (value, "0")
 	    && !nm_streq (value, "none")
-	    && nm_streq (mode, "active-backup"))
+	    && priv->mode == NM_BOND_MODE_ACTIVEBACKUP)
 		set_bond_attr (device, "arp_validate", value);
 	else
 		set_bond_attr (device, "arp_validate", "0");
 
-	if (NM_IN_STRSET (mode, "active-backup", "balance-alb", "balance-tlb")) {
-		value = nm_setting_bond_get_option_by_name (s_bond, NM_SETTING_BOND_OPTION_PRIMARY);
-		set_bond_attr (device, "primary", value ? value : "");
-		set_simple_option (device, "lp_interval", s_bond, NM_SETTING_BOND_OPTION_LP_INTERVAL);
-	}
+	/* Primary */
+	value = nm_setting_bond_get_option_by_name (s_bond, NM_SETTING_BOND_OPTION_PRIMARY);
+	set_bond_attr (device, "primary", value ? value : "");
 
-	/* Clear ARP targets */
+	/* ARP targets: clear and initialize the list */
 	contents = nm_platform_sysctl_master_get_option (NM_PLATFORM_GET, ifindex, "arp_ip_target");
 	set_arp_targets (device, contents, " \n", "-");
-	g_free (contents);
-
-	/* Add new ARP targets */
 	value = nm_setting_bond_get_option_by_name (s_bond, NM_SETTING_BOND_OPTION_ARP_IP_TARGET);
 	set_arp_targets (device, value, ",", "+");
+	g_free (contents);
 
 	set_simple_option (device, "primary_reselect", s_bond, NM_SETTING_BOND_OPTION_PRIMARY_RESELECT);
 	set_simple_option (device, "fail_over_mac", s_bond, NM_SETTING_BOND_OPTION_FAIL_OVER_MAC);
@@ -338,23 +344,15 @@ apply_bonding_config (NMDevice *device)
 	set_simple_option (device, "all_slaves_active", s_bond, NM_SETTING_BOND_OPTION_ALL_SLAVES_ACTIVE);
 	set_simple_option (device, "num_grat_arp", s_bond, NM_SETTING_BOND_OPTION_NUM_GRAT_ARP);
 	set_simple_option (device, "num_unsol_na", s_bond, NM_SETTING_BOND_OPTION_NUM_UNSOL_NA);
-
-	if (nm_streq (mode, "802.3ad")) {
-		set_simple_option (device, "lacp_rate", s_bond, NM_SETTING_BOND_OPTION_LACP_RATE);
-		set_simple_option (device, "ad_actor_sys_prio", s_bond, NM_SETTING_BOND_OPTION_AD_ACTOR_SYS_PRIO);
-		set_simple_option (device, "ad_actor_system", s_bond, NM_SETTING_BOND_OPTION_AD_ACTOR_SYSTEM);
-		set_simple_option (device, "ad_user_port_key", s_bond, NM_SETTING_BOND_OPTION_AD_USER_PORT_KEY);
-		set_simple_option (device, "min_links", s_bond, NM_SETTING_BOND_OPTION_MIN_LINKS);
-	}
-
-	if (nm_streq (mode, "active-backup"))
-		set_simple_option (device, "arp_all_targets", s_bond, NM_SETTING_BOND_OPTION_ARP_ALL_TARGETS);
-
-	if (nm_streq (mode, "balance-rr"))
-		set_simple_option (device, "packets_per_slave", s_bond, NM_SETTING_BOND_OPTION_PACKETS_PER_SLAVE);
-
-	if (nm_streq (mode, "balance-tlb"))
-		set_simple_option (device, "tlb_dynamic_lb", s_bond, NM_SETTING_BOND_OPTION_TLB_DYNAMIC_LB);
+	set_simple_option (device, "lacp_rate", s_bond, NM_SETTING_BOND_OPTION_LACP_RATE);
+	set_simple_option (device, "ad_actor_sys_prio", s_bond, NM_SETTING_BOND_OPTION_AD_ACTOR_SYS_PRIO);
+	set_simple_option (device, "ad_actor_system", s_bond, NM_SETTING_BOND_OPTION_AD_ACTOR_SYSTEM);
+	set_simple_option (device, "ad_user_port_key", s_bond, NM_SETTING_BOND_OPTION_AD_USER_PORT_KEY);
+	set_simple_option (device, "min_links", s_bond, NM_SETTING_BOND_OPTION_MIN_LINKS);
+	set_simple_option (device, "arp_all_targets", s_bond, NM_SETTING_BOND_OPTION_ARP_ALL_TARGETS);
+	set_simple_option (device, "packets_per_slave", s_bond, NM_SETTING_BOND_OPTION_PACKETS_PER_SLAVE);
+	set_simple_option (device, "tlb_dynamic_lb", s_bond, NM_SETTING_BOND_OPTION_TLB_DYNAMIC_LB);
+	set_simple_option (device, "lp_interval", s_bond, NM_SETTING_BOND_OPTION_LP_INTERVAL);
 
 	return NM_ACT_STAGE_RETURN_SUCCESS;
 }
