@@ -449,7 +449,6 @@ nm_setting_bond_get_option_default (NMSettingBond *setting, const char *name)
 	}
 	/* Any option that passes nm_setting_bond_validate_option() should also be found in defaults */
 	g_assert_not_reached ();
-	return NULL;
 }
 
 /**
@@ -473,7 +472,6 @@ _nm_setting_bond_get_option_type (NMSettingBond *setting, const char *name)
 	}
 	/* Any option that passes nm_setting_bond_validate_option() should also be found in defaults */
 	g_assert_not_reached ();
-	return NM_BOND_OPTION_TYPE_INT;
 }
 
 NMBondMode
