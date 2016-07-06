@@ -137,10 +137,10 @@ set_bond_attr (NMDevice *device, NMBondMode mode, const char *attr, const char *
 static gboolean
 ignore_if_zero (const char *option, const char *value)
 {
-	if (strcmp (option, NM_SETTING_BOND_OPTION_ARP_INTERVAL) &&
-	    strcmp (option, NM_SETTING_BOND_OPTION_DOWNDELAY) &&
-	    strcmp (option, NM_SETTING_BOND_OPTION_MIIMON) &&
-	    strcmp (option, NM_SETTING_BOND_OPTION_UPDELAY))
+	if (!NM_IN_STRSET (option, NM_SETTING_BOND_OPTION_ARP_INTERVAL,
+	                           NM_SETTING_BOND_OPTION_DOWNDELAY,
+	                           NM_SETTING_BOND_OPTION_MIIMON,
+	                           NM_SETTING_BOND_OPTION_UPDELAY))
 		return FALSE;
 
 	return g_strcmp0 (value, "0") == 0 ? TRUE : FALSE;
