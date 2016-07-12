@@ -5136,6 +5136,67 @@ _checkpoint_mgr_get (NMManager *self, gboolean create_as_needed)
 }
 
 static void
+checkpoint_auth_done_cb (NMAuthChain *chain,
+                         GError *auth_error,
+                         GDBusMethodInvocation *context,
+                         gpointer user_data)
+{
+	NMManager *self = NM_MANAGER (user_data);
+	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (self);
+	GError *error = NULL;
+	NMAuthCallResult result;
+	char *op, *checkpoint_id = NULL;
+	guint32 timeout, flags;
+	char **devices;
+	GVariant *variant = NULL;
+
+	op = nm_auth_chain_get_data (chain, "op");
+	priv->auth_chains = g_slist_remove (priv->auth_chains, chain);
+	result = nm_auth_chain_get_result (chain, NM_AUTH_PERMISSION_CHECKPOINT_ROLLBACK);
+
+	if (auth_error) {
+		error = g_error_new (NM_MANAGER_ERROR,
+		                     NM_MANAGER_ERROR_PERMISSION_DENIED,
+		                     "checkpoint create check request failed: %s",
+		                     auth_error->message);
+	} else if (result != NM_AUTH_CALL_RESULT_YES) {
+		error = g_error_new_literal (NM_MANAGER_ERROR,
+		                             NM_MANAGER_ERROR_PERMISSION_DENIED,
+		                             "Not authorized to checkpoint/rollback");
+	} else {
+		if (nm_streq0 (op, "create")) {
+			timeout = GPOINTER_TO_UINT (nm_auth_chain_get_data (chain, "timeout"));
+			flags = GPOINTER_TO_UINT (nm_auth_chain_get_data (chain, "flags"));
+			devices = nm_auth_chain_get_data (chain, "devices");
+
+			checkpoint_id = nm_checkpoint_manager_create (_checkpoint_mgr_get (self, TRUE),
+			                                              (const char *const *) devices,
+			                                              timeout,
+			                                              (NMCheckpointCreateFlags) flags,
+			                                              &error);
+			if (checkpoint_id)
+				variant = g_variant_new ("(s)", checkpoint_id);
+		} else if (nm_streq0 (op, "destroy")) {
+			checkpoint_id = nm_auth_chain_get_data (chain, "checkpoint_id");
+			nm_checkpoint_manager_destroy (_checkpoint_mgr_get (self, TRUE),
+			                               checkpoint_id, &error);
+		} else if (nm_streq0 (op, "rollback")) {
+			checkpoint_id = nm_auth_chain_get_data (chain, "checkpoint_id");
+			nm_checkpoint_manager_rollback (_checkpoint_mgr_get (self, TRUE),
+			                                checkpoint_id, &error);
+		} else
+			g_return_if_reached ();
+	}
+
+	if (error)
+		g_dbus_method_invocation_take_error (context, error);
+	else
+		g_dbus_method_invocation_return_value (context, variant);
+
+	nm_auth_chain_unref (chain);
+}
+
+static void
 impl_manager_checkpoint_create (NMManager *self,
                                 GDBusMethodInvocation *context,
                                 const char *const*devices,
@@ -5143,29 +5204,28 @@ impl_manager_checkpoint_create (NMManager *self,
                                 guint32 flags)
 {
 	NMManagerPrivate *priv;
+	NMAuthChain *chain;
 	GError *error = NULL;
-	char *checkpoint_id;
 
+	G_STATIC_ASSERT_EXPR (sizeof (flags) <= sizeof (NMCheckpointCreateFlags));
 	g_return_if_fail (NM_IS_MANAGER (self));
 	priv = NM_MANAGER_GET_PRIVATE (self);
 
-	if (!nm_bus_manager_ensure_root (priv->dbus_mgr, context,
-	                                 NM_SETTINGS_ERROR, NM_SETTINGS_ERROR_PERMISSION_DENIED))
-		return;
-
-	G_STATIC_ASSERT_EXPR (sizeof (flags) <= sizeof (NMCheckpointCreateFlags));
-
-	checkpoint_id = nm_checkpoint_manager_create (_checkpoint_mgr_get (self, TRUE),
-	                                              devices,
-	                                              rollback_timeout,
-	                                              (NMCheckpointCreateFlags) flags,
-	                                              &error);
-	if (!checkpoint_id) {
+	chain = nm_auth_chain_new_context (context, checkpoint_auth_done_cb, self);
+	if (!chain) {
+		error = g_error_new_literal (NM_MANAGER_ERROR,
+		                             NM_MANAGER_ERROR_PERMISSION_DENIED,
+		                             "Unable to authenticate request.");
 		g_dbus_method_invocation_take_error (context, error);
 		return;
 	}
-	g_dbus_method_invocation_return_value (context,
-	                                       g_variant_new ("(s)", checkpoint_id));
+
+	priv->auth_chains = g_slist_append (priv->auth_chains, chain);
+	nm_auth_chain_set_data (chain, "op", "create", NULL);
+	nm_auth_chain_set_data (chain, "devices", g_strdupv ((char **) devices), (GDestroyNotify) g_strfreev);
+	nm_auth_chain_set_data (chain, "flags",  GUINT_TO_POINTER (flags), NULL);
+	nm_auth_chain_set_data (chain, "timeout", GUINT_TO_POINTER (rollback_timeout), NULL);
+	nm_auth_chain_add_call (chain, NM_AUTH_PERMISSION_CHECKPOINT_ROLLBACK, TRUE);
 }
 
 static void
@@ -5175,22 +5235,24 @@ impl_manager_checkpoint_destroy (NMManager *self,
 {
 	NMManagerPrivate *priv;
 	GError *error = NULL;
-	gboolean r;
+	NMAuthChain *chain;
 
 	g_return_if_fail (NM_IS_MANAGER (self));
 	priv = NM_MANAGER_GET_PRIVATE (self);
 
-	if (!nm_bus_manager_ensure_root (priv->dbus_mgr, context,
-	                                 NM_SETTINGS_ERROR, NM_SETTINGS_ERROR_PERMISSION_DENIED))
-		return;
-
-	r = nm_checkpoint_manager_destroy (_checkpoint_mgr_get (self, TRUE),
-	                                    checkpoint_id, &error);
-	if (!r) {
+	chain = nm_auth_chain_new_context (context, checkpoint_auth_done_cb, self);
+	if (!chain) {
+		error = g_error_new_literal (NM_MANAGER_ERROR,
+		                             NM_MANAGER_ERROR_PERMISSION_DENIED,
+		                             "Unable to authenticate request.");
 		g_dbus_method_invocation_take_error (context, error);
 		return;
 	}
-	g_dbus_method_invocation_return_value (context, NULL);
+
+	priv->auth_chains = g_slist_append (priv->auth_chains, chain);
+	nm_auth_chain_set_data (chain, "op", "destroy", NULL);
+	nm_auth_chain_set_data (chain, "checkpoint_id", g_strdup (checkpoint_id), g_free);
+	nm_auth_chain_add_call (chain, NM_AUTH_PERMISSION_CHECKPOINT_ROLLBACK, TRUE);
 }
 
 static void
@@ -5200,22 +5262,24 @@ impl_manager_checkpoint_rollback (NMManager *self,
 {
 	NMManagerPrivate *priv;
 	GError *error = NULL;
-	gboolean r;
+	NMAuthChain *chain;
 
 	g_return_if_fail (NM_IS_MANAGER (self));
 	priv = NM_MANAGER_GET_PRIVATE (self);
 
-	if (!nm_bus_manager_ensure_root (priv->dbus_mgr, context,
-	                                 NM_SETTINGS_ERROR, NM_SETTINGS_ERROR_PERMISSION_DENIED))
-		return;
-
-	r = nm_checkpoint_manager_rollback (_checkpoint_mgr_get (self, TRUE),
-	                                    checkpoint_id, &error);
-	if (!r) {
+	chain = nm_auth_chain_new_context (context, checkpoint_auth_done_cb, self);
+	if (!chain) {
+		error = g_error_new_literal (NM_MANAGER_ERROR,
+		                             NM_MANAGER_ERROR_PERMISSION_DENIED,
+		                             "Unable to authenticate request.");
 		g_dbus_method_invocation_take_error (context, error);
 		return;
 	}
-	g_dbus_method_invocation_return_value (context, NULL);
+
+	priv->auth_chains = g_slist_append (priv->auth_chains, chain);
+	nm_auth_chain_set_data (chain, "op", "rollback", NULL);
+	nm_auth_chain_set_data (chain, "checkpoint_id", g_strdup (checkpoint_id), g_free);
+	nm_auth_chain_add_call (chain, NM_AUTH_PERMISSION_CHECKPOINT_ROLLBACK, TRUE);
 }
 
 /******************************************************************************/
