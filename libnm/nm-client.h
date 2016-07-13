@@ -97,6 +97,8 @@ G_BEGIN_DECLS
  * @NM_CLIENT_PERMISSION_SETTINGS_MODIFY_GLOBAL_DNS: modify persistent global
  *  DNS configuration
  * @NM_CLIENT_PERMISSION_RELOAD: controls access to Reload.
+ * @NM_CLIENT_PERMISSION_CHECKPOINT_ROLLBACK: controls whether the client can
+ *  perform a checkpoint and rollback of devices' configuration
  * @NM_CLIENT_PERMISSION_LAST: a reserved boundary value
  *
  * #NMClientPermission values indicate various permissions that NetworkManager
@@ -117,8 +119,9 @@ typedef enum {
 	NM_CLIENT_PERMISSION_SETTINGS_MODIFY_HOSTNAME = 11,
 	NM_CLIENT_PERMISSION_SETTINGS_MODIFY_GLOBAL_DNS = 12,
 	NM_CLIENT_PERMISSION_RELOAD = 13,
+	NM_CLIENT_PERMISSION_CHECKPOINT_ROLLBACK = 14,
 
-	NM_CLIENT_PERMISSION_LAST = 13,
+	NM_CLIENT_PERMISSION_LAST = 14,
 } NMClientPermission;
 
 /**
@@ -353,6 +356,27 @@ void     nm_client_reload_connections_async  (NMClient *client,
 gboolean nm_client_reload_connections_finish (NMClient *client,
                                               GAsyncResult *result,
                                               GError **error);
+
+/* Checkpoint / rollback */
+
+char *nm_client_checkpoint_create (NMClient *client,
+                                   const NMDevice **devices,
+                                   guint32 rollback_timeout,
+                                   guint32 flags,
+                                   GCancellable *cancellable,
+                                   GError **error);
+
+gboolean
+nm_client_checkpoint_destroy (NMClient *client,
+                              const char *checkpoint_id,
+                              GCancellable *cancellable,
+                              GError **error);
+
+gboolean
+nm_client_checkpoint_rollback (NMClient *client,
+                               const char *checkpoint_id,
+                               GCancellable *cancellable,
+                               GError **error);
 
 G_END_DECLS
 

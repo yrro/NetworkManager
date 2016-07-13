@@ -700,7 +700,7 @@ typedef enum {
  *
  * Since: 1.4
  */
-typedef enum { /*< skip >*/
+typedef enum {
 	NM_CHECKPOINT_CREATE_FLAG_NONE              = 0,
 	NM_CHECKPOINT_CREATE_FLAG_DESTROY_ALL       = 0x01,
 } NMCheckpointCreateFlags;

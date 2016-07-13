@@ -174,6 +174,25 @@ gboolean nm_manager_deactivate_connection_finish (NMManager *manager,
                                                   GAsyncResult *result,
                                                   GError **error);
 
+/* Checkpoint / rollback */
+
+char *nm_manager_checkpoint_create (NMManager *manager,
+                                    const NMDevice **devices,
+                                    guint32 rollback_timeout,
+                                    guint32 flags,
+                                    GCancellable *cancellable,
+                                    GError **error);
+
+gboolean nm_manager_checkpoint_destroy (NMManager *manager,
+                                        const char *checkpoint_id,
+                                        GCancellable *cancellable,
+                                        GError **error);
+
+gboolean nm_manager_checkpoint_rollback (NMManager *manager,
+                                         const char *checkpoint_id,
+                                         GCancellable *cancellable,
+                                         GError **error);
+
 G_END_DECLS
 
 #endif /* __NM_MANAGER_H__ */

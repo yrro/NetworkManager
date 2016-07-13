@@ -1605,6 +1605,103 @@ nm_client_reload_connections_finish (NMClient *client,
 /****************************************************************/
 
 /**
+ * nm_client_checkpoint_create:
+ * @client: a #NMClient
+ * @devices: (array zero-terminated=1): list of devices for which a checkpoint
+ *     must be created. An empty list means all managed devices
+ * @rollback_timeout: timeout for rollback in seconds, or zero for no automatic rollback
+ * @flags: optional flags
+ * @cancellable: a #GCancellable, or %NULL
+ * @error: location for a #GError, or %NULL
+ *
+ * Creates a checkpoint for the given devices, that will be rolled back in
+ * @rollback_timeout seconds unless a manual rollback or destroy is performed
+ * before on the returned checkpoint ID.
+ *
+ * Returns: the checkpoint identifier
+ *
+ * Since: 1.4
+ **/
+char *
+nm_client_checkpoint_create (NMClient *client,
+                             const NMDevice **devices,
+                             guint32 rollback_timeout,
+                             guint32 flags,
+                             GCancellable *cancellable,
+                             GError **error)
+{
+	g_return_val_if_fail (NM_IS_CLIENT (client), FALSE);
+
+	if (!_nm_client_check_nm_running (client, NULL))
+		return NULL;
+
+	return nm_manager_checkpoint_create (NM_CLIENT_GET_PRIVATE (client)->manager,
+	                                     devices, rollback_timeout, flags,
+	                                     cancellable, error);
+}
+
+/**
+ * nm_client_checkpoint_destroy:
+ * @client: a #NMClient
+ * @checkpoint_id: the ID of the checkpoint to destroy
+ * @cancellable: a #GCancellable, or %NULL
+ * @error: location for a #GError, or %NULL
+ *
+ * Destroys a checkpoint.
+ *
+ * Returns: %TRUE in case of success, %FALSE otherwise
+ *
+ * Since: 1.4
+ **/
+gboolean
+nm_client_checkpoint_destroy (NMClient *client,
+                              const char *checkpoint_id,
+                              GCancellable *cancellable,
+                              GError **error)
+{
+	g_return_val_if_fail (NM_IS_CLIENT (client), FALSE);
+
+	if (!_nm_client_check_nm_running (client, NULL))
+		return NULL;
+
+	return nm_manager_checkpoint_destroy (NM_CLIENT_GET_PRIVATE (client)->manager,
+	                                      checkpoint_id,
+	                                      cancellable, error);
+}
+
+/**
+ * nm_client_checkpoint_rollback:
+ * @client: a #NMClient
+ * @checkpoint_id: the ID of the checkpoint to rollback
+ * @cancellable: a #GCancellable, or %NULL
+ * @error: location for a #GError, or %NULL
+ *
+ * Perform a rollback of a checkpoint.
+ *
+ * Returns: %TRUE in case of success, %FALSE otherwise
+ *
+ * Since: 1.4
+ **/
+gboolean
+nm_client_checkpoint_rollback (NMClient *client,
+                               const char *checkpoint_id,
+                               GCancellable *cancellable,
+                               GError **error)
+{
+	g_return_val_if_fail (NM_IS_CLIENT (client), FALSE);
+
+	if (!_nm_client_check_nm_running (client, NULL))
+		return NULL;
+
+	return nm_manager_checkpoint_rollback (NM_CLIENT_GET_PRIVATE (client)->manager,
+	                                       checkpoint_id,
+	                                       cancellable, error);
+}
+
+/****************************************************************/
+
+
+/**
  * nm_client_new:
  * @cancellable: a #GCancellable, or %NULL
  * @error: location for a #GError, or %NULL

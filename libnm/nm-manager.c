@@ -232,6 +232,8 @@ nm_permission_to_client (const char *nm)
 		return NM_CLIENT_PERMISSION_SETTINGS_MODIFY_GLOBAL_DNS;
 	else if (!strcmp (nm, NM_AUTH_PERMISSION_RELOAD))
 		return NM_CLIENT_PERMISSION_RELOAD;
+	else if (!strcmp (nm, NM_AUTH_PERMISSION_CHECKPOINT_ROLLBACK))
+		return NM_CLIENT_PERMISSION_CHECKPOINT_ROLLBACK;
 
 	return NM_CLIENT_PERMISSION_NONE;
 }
@@ -1178,6 +1180,86 @@ nm_manager_deactivate_connection_finish (NMManager *manager,
 		return FALSE;
 	else
 		return g_simple_async_result_get_op_res_gboolean (simple);
+}
+
+/****************************************************************/
+/* Checkpoint / rollback                                        */
+/****************************************************************/
+
+char *
+nm_manager_checkpoint_create (NMManager *manager,
+                              const NMDevice **devices,
+                              guint32 rollback_timeout,
+                              guint32 flags,
+                              GCancellable *cancellable,
+                              GError **error)
+{
+	const NMDevice **device;
+	GPtrArray *array;
+	char *id;
+	gs_free char **device_paths = NULL;
+
+	g_return_val_if_fail (NM_IS_MANAGER (manager), FALSE);
+
+	array = g_ptr_array_new ();
+	for (device = devices; *device; device++)
+		g_ptr_array_add (array, (gpointer) nm_object_get_path (NM_OBJECT (*device)));
+	g_ptr_array_add (array, NULL);
+
+	device_paths = (char **) g_ptr_array_free (array, FALSE);
+
+	if (nmdbus_manager_call_checkpoint_create_sync (NM_MANAGER_GET_PRIVATE (manager)->manager_proxy,
+	                                                (const char *const *) device_paths,
+	                                                rollback_timeout,
+	                                                flags,
+	                                                &id,
+	                                                cancellable, error)) {
+		return id;
+	} else {
+		if (error && *error)
+			g_dbus_error_strip_remote_error (*error);
+		return NULL;
+	}
+}
+
+gboolean
+nm_manager_checkpoint_destroy (NMManager *manager,
+                               const char *checkpoint_id,
+                               GCancellable *cancellable,
+                               GError **error)
+{
+	g_return_val_if_fail (NM_IS_MANAGER (manager), FALSE);
+
+	if (nmdbus_manager_call_checkpoint_destroy_sync (NM_MANAGER_GET_PRIVATE (manager)->manager_proxy,
+	                                                 checkpoint_id,
+	                                                 cancellable,
+	                                                 error)) {
+		return TRUE;
+	} else {
+		if (error && *error)
+			g_dbus_error_strip_remote_error (*error);
+		return FALSE;
+	}
+}
+
+gboolean
+nm_manager_checkpoint_rollback (NMManager *manager,
+                                const char *checkpoint_id,
+                                GCancellable *cancellable,
+                                GError **error)
+{
+	g_return_val_if_fail (NM_IS_MANAGER (manager), FALSE);
+
+	if (nmdbus_manager_call_checkpoint_rollback_sync (NM_MANAGER_GET_PRIVATE (manager)->manager_proxy,
+	                                                  checkpoint_id,
+	                                                  cancellable,
+	                                                  error)) {
+		return TRUE;
+	} else {
+		if (error && *error)
+			g_dbus_error_strip_remote_error (*error);
+		return FALSE;
+	}
 }
 
 /****************************************************************/
