@@ -119,6 +119,7 @@ do_rollback (NMCheckpointManager *self, Checkpoint *cp, GError **error)
 		if (!device) {
 			_LOGD ("device %s no longer exists", dev_cp->dev_path);
 			success = FALSE;
+			continue;
 		}
 
 		_LOGD ("restoring state of device %s", nm_device_get_iface (device));
