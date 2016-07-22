@@ -1661,8 +1661,8 @@ nm_client_checkpoint_destroy (NMClient *client,
 {
 	g_return_val_if_fail (NM_IS_CLIENT (client), FALSE);
 
-	if (!_nm_client_check_nm_running (client, NULL))
-		return NULL;
+	if (!_nm_client_check_nm_running (client, error))
+		return FALSE;
 
 	return nm_manager_checkpoint_destroy (NM_CLIENT_GET_PRIVATE (client)->manager,
 	                                      checkpoint_id,
@@ -1690,8 +1690,8 @@ nm_client_checkpoint_rollback (NMClient *client,
 {
 	g_return_val_if_fail (NM_IS_CLIENT (client), FALSE);
 
-	if (!_nm_client_check_nm_running (client, NULL))
-		return NULL;
+	if (!_nm_client_check_nm_running (client, error))
+		return FALSE;
 
 	return nm_manager_checkpoint_rollback (NM_CLIENT_GET_PRIVATE (client)->manager,
 	                                       checkpoint_id,
