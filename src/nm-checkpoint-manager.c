@@ -218,9 +218,10 @@ nm_checkpoint_manager_destroy (NMCheckpointManager *self,
 	gboolean ret;
 
 	g_return_val_if_fail (self, FALSE);
+	g_return_val_if_fail (checkpoint_path && checkpoint_path[0] == '/', FALSE);
 	g_return_val_if_fail (!error || !*error, FALSE);
 
-	if (checkpoint_path && checkpoint_path[0]) {
+	if (!nm_streq (checkpoint_path, "/")) {
 		ret = g_hash_table_remove (self->checkpoints, checkpoint_path);
 		if (!ret) {
 			g_set_error (error,
@@ -242,7 +243,7 @@ nm_checkpoint_manager_rollback (NMCheckpointManager *self,
 	NMCheckpoint *cp;
 
 	g_return_val_if_fail (self, FALSE);
-	g_return_val_if_fail (checkpoint_path && *checkpoint_path, FALSE);
+	g_return_val_if_fail (checkpoint_path && checkpoint_path[0] == '/', FALSE);
 	g_return_val_if_fail (results, FALSE);
 	g_return_val_if_fail (!error || !*error, FALSE);
 
