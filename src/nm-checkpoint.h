@@ -39,7 +39,7 @@ typedef struct _NMCheckpoint NMCheckpoint;
 
 GType nm_checkpoint_get_type (void);
 
-NMCheckpoint *nm_checkpoint_new (NMManager *manager, GPtrArray *devices, guint64 rollback_timeout,
+NMCheckpoint *nm_checkpoint_new (NMManager *manager, GPtrArray *devices, guint32 rollback_timeout,
                                  GError **error);
 
 guint64 nm_checkpoint_get_rollback_ts (NMCheckpoint *checkpoint);

@@ -303,7 +303,7 @@ get_all_devices (NMManager *manager, GPtrArray *devices)
 }
 
 NMCheckpoint *
-nm_checkpoint_new (NMManager *manager, GPtrArray *devices, guint64 rollback_timeout,
+nm_checkpoint_new (NMManager *manager, GPtrArray *devices, guint32 rollback_timeout,
                    GError **error)
 {
 	NMCheckpoint *self;
@@ -334,8 +334,8 @@ nm_checkpoint_new (NMManager *manager, GPtrArray *devices, guint64 rollback_time
 	priv->created = time (NULL);
 	priv->rollback_timeout = rollback_timeout;
 	priv->rollback_ts = rollback_timeout ?
-		(nm_utils_get_monotonic_timestamp_ms () + (gint64) 1000 * rollback_timeout) :
-		0;
+	    (nm_utils_get_monotonic_timestamp_ms () + ((gint64) rollback_timeout * 1000)) :
+	    0;
 
 	for (i = 0; i < devices->len; i++) {
 		device = (NMDevice *) devices->pdata[i];
