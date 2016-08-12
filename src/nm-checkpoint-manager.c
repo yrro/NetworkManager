@@ -165,7 +165,7 @@ nm_checkpoint_manager_create (NMCheckpointManager *self,
 		}
 		g_ptr_array_add (devices, device);
 	}
-	
+
 	if (!NM_FLAGS_HAS (flags, NM_CHECKPOINT_CREATE_FLAG_DESTROY_ALL)) {
 		for (i = 0; i < devices->len; i++) {
 			device = devices->pdata[i];

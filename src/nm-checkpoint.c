@@ -413,16 +413,16 @@ nm_checkpoint_class_init (NMCheckpointClass *checkpoint_class)
 	                         G_PARAM_STATIC_STRINGS);
 
 	obj_properties[PROP_CREATED] =
-		g_param_spec_uint64 (NM_CHECKPOINT_CREATED, "", "",
-		                     0, G_MAXUINT64, 0,
-		                     G_PARAM_READABLE |
-		                     G_PARAM_STATIC_STRINGS);
+	    g_param_spec_uint64 (NM_CHECKPOINT_CREATED, "", "",
+	                         0, G_MAXUINT64, 0,
+	                         G_PARAM_READABLE |
+	                         G_PARAM_STATIC_STRINGS);
 
 	obj_properties[PROP_ROLLBACK_TIMEOUT] =
-		g_param_spec_uint (NM_CHECKPOINT_ROLLBACK_TIMEOUT, "", "",
-		                     0, G_MAXUINT32, 0,
-		                     G_PARAM_READABLE |
-		                     G_PARAM_STATIC_STRINGS);
+	    g_param_spec_uint (NM_CHECKPOINT_ROLLBACK_TIMEOUT, "", "",
+	                       0, G_MAXUINT32, 0,
+	                       G_PARAM_READABLE |
+	                       G_PARAM_STATIC_STRINGS);
 
 	g_object_class_install_properties (object_class, _PROPERTY_ENUMS_LAST, obj_properties);
 
