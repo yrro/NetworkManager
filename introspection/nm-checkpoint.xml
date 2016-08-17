@@ -20,10 +20,9 @@
     <!--
         Created:
 
-        Timestamp of checkpoint creation expressed as the number of
-        seconds since the Unix Epoch.
+        The timestamp (in CLOCK_BOOTTIME milliseconds) of checkpoint creation.
     -->
-    <property name="Created" type="t" access="read"/>
+    <property name="Created" type="x" access="read"/>
 
     <!--
         RollbackTimeout:

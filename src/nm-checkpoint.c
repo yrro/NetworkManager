@@ -61,7 +61,7 @@ typedef struct {
 typedef struct {
 	/* properties */
 	GHashTable *devices;
-	guint64 created;
+	gint64 created;
 	guint32 rollback_timeout;
 	/* private members */
 	NMManager *manager;
@@ -331,7 +331,8 @@ nm_checkpoint_new (NMManager *manager, GPtrArray *devices, guint32 rollback_time
 
 	priv = NM_CHECKPOINT_GET_PRIVATE (self);
 	priv->manager = manager;
-	priv->created = time (NULL);
+	priv->created = nm_utils_monotonic_timestamp_as_boottime (nm_utils_get_monotonic_timestamp_ms (),
+	                                                          NM_UTILS_NS_PER_MSEC);
 	priv->rollback_timeout = rollback_timeout;
 	priv->rollback_ts = rollback_timeout ?
 	    (nm_utils_get_monotonic_timestamp_ms () + ((gint64) rollback_timeout * 1000)) :
@@ -379,7 +380,7 @@ get_property (GObject *object, guint prop_id,
 		nm_utils_g_value_set_object_path_array (value, devices, NULL, NULL);
 		break;
 	case PROP_CREATED:
-		g_value_set_uint64 (value, priv->created);
+		g_value_set_int64 (value, priv->created);
 		break;
 	case PROP_ROLLBACK_TIMEOUT:
 		g_value_set_uint (value, priv->rollback_timeout);
@@ -413,10 +414,10 @@ nm_checkpoint_class_init (NMCheckpointClass *checkpoint_class)
 	                         G_PARAM_STATIC_STRINGS);
 
 	obj_properties[PROP_CREATED] =
-	    g_param_spec_uint64 (NM_CHECKPOINT_CREATED, "", "",
-	                         0, G_MAXUINT64, 0,
-	                         G_PARAM_READABLE |
-	                         G_PARAM_STATIC_STRINGS);
+	    g_param_spec_int64 (NM_CHECKPOINT_CREATED, "", "",
+	                        G_MININT64, G_MAXINT64, 0,
+	                        G_PARAM_READABLE |
+	                        G_PARAM_STATIC_STRINGS);
 
 	obj_properties[PROP_ROLLBACK_TIMEOUT] =
 	    g_param_spec_uint (NM_CHECKPOINT_ROLLBACK_TIMEOUT, "", "",
