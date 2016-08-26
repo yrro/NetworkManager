@@ -489,6 +489,7 @@ static void
 create_async_inited (GObject *object, GAsyncResult *result, gpointer user_data)
 {
 	NMObjectPrivate *priv = NM_OBJECT_GET_PRIVATE (object);
+	NMObjectPrivate *odata_priv;
 	NMObjectTypeAsyncData *async_data = user_data;
 	GError *error = NULL;
 	ObjectCreatedData *odata;
@@ -501,9 +502,12 @@ create_async_inited (GObject *object, GAsyncResult *result, gpointer user_data)
 
 		while (priv->waiters) {
 			odata = priv->waiters->data;
+			odata_priv = NM_OBJECT_GET_PRIVATE (odata->self);
+
 			priv->waiters = g_slist_remove (priv->waiters, odata);
-			NM_OBJECT_GET_PRIVATE (odata->self)->reload_error = g_error_copy (error);
-			NM_OBJECT_GET_PRIVATE (odata->self)->reload_remaining--;
+			if (!odata_priv->reload_error)
+				odata_priv->reload_error = g_error_copy (error);
+			odata_priv->reload_remaining--;
 			reload_complete (odata->self, FALSE);
 		}
 
