@@ -473,6 +473,7 @@ master_failed (NMActiveConnection *self)
  */
 NMActRequest *
 nm_act_request_new (NMSettingsConnection *settings_connection,
+                    NMConnection *applied,
                     const char *specific_object,
                     NMAuthSubject *subject,
                     NMDevice *device)
@@ -482,6 +483,7 @@ nm_act_request_new (NMSettingsConnection *settings_connection,
 	g_return_val_if_fail (NM_IS_AUTH_SUBJECT (subject), NULL);
 
 	return (NMActRequest *) g_object_new (NM_TYPE_ACT_REQUEST,
+	                                      NM_ACTIVE_CONNECTION_INT_APPLIED_CONNECTION, applied,
 	                                      NM_ACTIVE_CONNECTION_INT_SETTINGS_CONNECTION, settings_connection,
 	                                      NM_ACTIVE_CONNECTION_INT_DEVICE, device,
 	                                      NM_ACTIVE_CONNECTION_SPECIFIC_OBJECT, specific_object,
