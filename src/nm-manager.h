@@ -88,6 +88,7 @@ GSList *      nm_manager_get_activatable_connections   (NMManager *manager);
 /* Device handling */
 
 const GSList *      nm_manager_get_devices             (NMManager *manager);
+const char **       nm_manager_get_device_paths        (NMManager *self);
 
 NMDevice *          nm_manager_get_device_by_ifindex   (NMManager *manager,
                                                         int ifindex);
