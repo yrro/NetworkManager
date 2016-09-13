@@ -750,10 +750,14 @@ nm_secret_agent_simple_enable (NMSecretAgentSimple *self, const char *path)
 {
 	NMSecretAgentSimplePrivate *priv = NM_SECRET_AGENT_SIMPLE_GET_PRIVATE (self);
 	GList *requests, *iter;
+	gs_free char *path_full = NULL;
 
-	if (g_strcmp0 (path, priv->path) != 0) {
+	path_full = path ? g_strdup_printf ("%s/", path) : NULL;
+
+	if (g_strcmp0 (path_full, priv->path) != 0) {
 		g_free (priv->path);
-		priv->path = g_strdup (path);
+		priv->path = path_full;
+		path_full = NULL;
 	}
 
 	if (priv->enabled)
