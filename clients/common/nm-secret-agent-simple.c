@@ -753,6 +753,10 @@ nm_secret_agent_simple_enable (NMSecretAgentSimple *self, const char *path)
 	GList *requests, *iter;
 	gs_free char *path_full = NULL;
 
+	/* The path is only used to match a request_id with the current
+	 * connection. Since the request_id is "${CONNECTION_PATH}/${SETTING}",
+	 * add a trailing '/' to the path to match the full connection path.
+	 */
 	path_full = path ? g_strdup_printf ("%s/", path) : NULL;
 
 	if (g_strcmp0 (path_full, priv->path) != 0) {
