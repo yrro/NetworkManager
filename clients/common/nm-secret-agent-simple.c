@@ -433,13 +433,14 @@ request_secrets_from_ui (NMSecretAgentSimpleRequest *request)
 	const char *title;
 	char *msg;
 	gboolean ok = TRUE;
-	gs_free_error GError *error = NULL;
 
 	priv = NM_SECRET_AGENT_SIMPLE_GET_PRIVATE (request->self);
 	g_return_if_fail (priv->enabled);
 
 	/* We only handle requests for connection with @path if set. */
 	if (!g_str_has_prefix (request->request_id, priv->path)) {
+		gs_free_error GError *error = NULL;
+
 		error = g_error_new (NM_SECRET_AGENT_ERROR, NM_SECRET_AGENT_ERROR_FAILED,
 		                     "Request for %s secrets doesn't match path %s",
 		                     request->request_id, priv->path);
