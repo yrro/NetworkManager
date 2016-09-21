@@ -955,8 +955,10 @@ constructed (GObject *object)
 	if (!priv->applied_connection && priv->settings_connection) {
 		priv->applied_connection =
 			nm_simple_connection_new_clone ((NMConnection *) priv->settings_connection);
-		nm_connection_clear_secrets (priv->applied_connection);
 	}
+
+	if (priv->applied_connection)
+		nm_connection_clear_secrets (priv->applied_connection);
 
 	_LOGD ("constructed (%s, version-id %llu)", G_OBJECT_TYPE_NAME (self), (long long unsigned) priv->version_id);
 
