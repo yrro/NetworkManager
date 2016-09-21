@@ -3227,6 +3227,7 @@ _internal_activation_auth_done (NMActiveConnection *active,
  * nm_manager_activate_connection():
  * @self: the #NMManager
  * @connection: the #NMSettingsConnection to activate on @device
+ * @applied: (allow-none): the applied connection to activate on @device
  * @specific_object: the specific object path, if any, for the activation
  * @device: the #NMDevice to activate @connection on
  * @subject: the subject which requested activation
@@ -3236,7 +3237,8 @@ _internal_activation_auth_done (NMActiveConnection *active,
  * @subject should be the subject of the activation that triggered this
  * one, or if this is an autoconnect request, a new internal subject.
  * The returned #NMActiveConnection is owned by the Manager and should be
- * referenced by the caller if the caller continues to use it.
+ * referenced by the caller if the caller continues to use it. If @applied
+ * is supplied, it shall not be modified by the caller afterwards.
  *
  * Returns: (transfer none): the new #NMActiveConnection that tracks
  * activation of @connection on @device
