@@ -2289,7 +2289,8 @@ nm_manager_get_device_paths (NMManager *self)
 
 	for (iter = devices; iter; iter = g_slist_next (iter)) {
 		path = nm_exported_object_get_path (NM_EXPORTED_OBJECT (iter->data));
-		g_ptr_array_add (paths, (gpointer) path);
+		if (path)
+			g_ptr_array_add (paths, (gpointer) path);
 	}
 
 	g_ptr_array_add (paths, NULL);
