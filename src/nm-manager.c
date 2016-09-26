@@ -2719,14 +2719,9 @@ find_slaves (NMManager *manager,
 	GSList *all_connections, *iter;
 	GSList *slaves = NULL;
 	NMSettingConnection *s_con;
-	const char *master;
 
 	s_con = nm_connection_get_setting_connection (NM_CONNECTION (connection));
 	g_assert (s_con);
-	master = nm_setting_connection_get_master (s_con);
-
-	if (master != NULL)
-		return NULL;  /* connection is not master */
 
 	/* Search through all connections, not only inactive ones, because
 	 * even if a slave was already active, it might be deactivated during
@@ -2786,6 +2781,7 @@ autoconnect_slaves (NMManager *self,
 {
 	GError *local_err = NULL;
 	gboolean ret = FALSE;
+	static GQuark key;
 
 	if (should_connect_slaves (NM_CONNECTION (master_connection), master_device)) {
 		GSList *slaves, *iter;
@@ -2795,13 +2791,38 @@ autoconnect_slaves (NMManager *self,
 
 		while (iter) {
 			NMSettingsConnection *slave_connection = iter->data;
+			const char *uuid;
 
 			iter = iter->next;
+
+			if (G_UNLIKELY (key == 0))
+				key = g_quark_from_static_string ("root-master-uuid");
+
+			uuid = g_object_get_qdata (G_OBJECT (master_connection), key);
+			if (nm_streq0 (nm_settings_connection_get_uuid (slave_connection), uuid)) {
+				_LOGE (LOGD_CORE,
+				       "will NOT activate slave connection '%s' (%s) as a dependency for master '%s' (%s): "
+				       "circular dependency detected",
+				       nm_settings_connection_get_id (slave_connection),
+				       nm_settings_connection_get_uuid (slave_connection),
+				       nm_settings_connection_get_id (master_connection),
+				       nm_settings_connection_get_uuid (master_connection));
+				continue;
+			}
+
 			_LOGD (LOGD_CORE, "will activate slave connection '%s' (%s) as a dependency for master '%s' (%s)",
 			       nm_settings_connection_get_id (slave_connection),
 			       nm_settings_connection_get_uuid (slave_connection),
 			       nm_settings_connection_get_id (master_connection),
 			       nm_settings_connection_get_uuid (master_connection));
+
+			/* Propagate down the root master UUID */
+			if (!uuid)
+				uuid = nm_settings_connection_get_uuid (master_connection);
+			g_object_set_qdata_full (G_OBJECT (slave_connection),
+			                         key,
+			                         g_strdup (uuid),
+			                         g_free);
 
 			/* Schedule slave activation */
 			nm_manager_activate_connection (self,
