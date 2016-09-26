@@ -2170,10 +2170,17 @@ platform_link_added (NMManager *self,
 
 	if (device) {
 		gs_free_error GError *error = NULL;
+		NMUnmanFlagOp unmanaged_user_explicit = NM_UNMAN_FLAG_OP_FORGET;
+
+		if (dev_state) {
+			unmanaged_user_explicit = dev_state->managed == NM_CONFIG_DEVICE_STATE_MANAGED_TYPE_MANAGED
+			                          ? NM_UNMAN_FLAG_OP_SET_MANAGED
+			                          : NM_UNMAN_FLAG_OP_SET_UNMANAGED;
+		}
 
 		if (nm_device_realize_start (device,
 		                             plink,
-		                             NM_UNMAN_FLAG_OP_FORGET,
+		                             unmanaged_user_explicit,
 		                             NULL,
 		                             &error)) {
 			add_device (self, device, NULL);
