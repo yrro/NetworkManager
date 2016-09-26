@@ -372,7 +372,6 @@ teamd_dbus_appeared (GDBusConnection *connection,
 	g_return_if_fail (priv->teamd_dbus_watch);
 
 	_LOGI (LOGD_TEAM, "teamd appeared on D-Bus");
-	nm_device_queue_recheck_assume (device);
 
 	/* If another teamd grabbed the bus name while our teamd was starting,
 	 * just ignore the death of our teamd and run with the existing one.
@@ -416,7 +415,7 @@ teamd_dbus_appeared (GDBusConnection *connection,
 			success = teamd_read_config (device);
 		if (success)
 			nm_device_activate_schedule_stage2_device_config (device);
-		else if (!nm_device_uses_assumed_connection (device))
+		else if (!nm_device_is_assuming (device))
 			nm_device_state_changed (device, NM_DEVICE_STATE_FAILED, NM_DEVICE_STATE_REASON_TEAMD_CONTROL_FAILED);
 	}
 }

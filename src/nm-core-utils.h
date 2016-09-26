@@ -470,4 +470,10 @@ struct stat;
 gboolean nm_utils_validate_plugin (const char *path, struct stat *stat, GError **error);
 char **nm_utils_read_plugin_paths (const char *dirname, const char *prefix);
 
+/*****************************************************************************/
+
+const char *nm_activation_type_to_string (NMActivationType activation_type);
+
+/*****************************************************************************/
+
 #endif /* __NM_CORE_UTILS_H__ */

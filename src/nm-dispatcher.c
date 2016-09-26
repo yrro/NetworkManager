@@ -573,11 +573,6 @@ _dispatcher_call (DispatcherAction action,
 			                       NMD_CONNECTION_PROPS_FILENAME,
 			                       g_variant_new_string (filename));
 		}
-		if (nm_settings_connection_get_garbage_collect (settings_connection)) {
-			g_variant_builder_add (&connection_props, "{sv}",
-			                       NMD_CONNECTION_PROPS_EXTERNAL,
-			                       g_variant_new_boolean (TRUE));
-		}
 	}
 
 	g_variant_builder_init (&device_props, G_VARIANT_TYPE_VARDICT);

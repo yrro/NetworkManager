@@ -61,6 +61,7 @@
  * @NM_SETTINGS_CONNECTION_FLAGS_GARBAGE_COLLECT: The connection will be deleted
  *  when it disconnects. That is for in-memory connections (unsaved), which are
  *  currently active but cleanup on disconnect.
+ *  FIXME: this flag is not yet properly implemented.
  * @NM_SETTINGS_CONNECTION_FLAGS_ALL: special mask, for all known flags
  *
  * #NMSettingsConnection flags.
