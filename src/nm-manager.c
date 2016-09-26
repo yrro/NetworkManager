@@ -2037,7 +2037,11 @@ factory_device_added_cb (NMDeviceFactory *factory,
 
 	g_return_if_fail (NM_IS_MANAGER (self));
 
-	if (nm_device_realize_start (device, NULL, NULL, &error)) {
+	if (nm_device_realize_start (device,
+	                             NULL,
+	                             NM_UNMAN_FLAG_OP_FORGET,
+	                             NULL,
+	                             &error)) {
 		add_device (self, device, NULL);
 		_device_realize_finish (self, device, NULL);
 	} else {
@@ -2110,7 +2114,11 @@ platform_link_added (NMManager *self,
 			 * device with the link's name.
 			 */
 			return;
-		} else if (nm_device_realize_start (candidate, plink, &compatible, &error)) {
+		} else if (nm_device_realize_start (candidate,
+		                                    plink,
+		                                    NM_UNMAN_FLAG_OP_FORGET,
+		                                    &compatible,
+		                                    &error)) {
 			/* Success */
 			_device_realize_finish (self, candidate, plink);
 			return;
@@ -2163,7 +2171,11 @@ platform_link_added (NMManager *self,
 	if (device) {
 		gs_free_error GError *error = NULL;
 
-		if (nm_device_realize_start (device, plink, NULL, &error)) {
+		if (nm_device_realize_start (device,
+		                             plink,
+		                             NM_UNMAN_FLAG_OP_FORGET,
+		                             NULL,
+		                             &error)) {
 			add_device (self, device, NULL);
 			_device_realize_finish (self, device, plink);
 		} else {
