@@ -55,6 +55,7 @@
 #define NM_ACTIVE_CONNECTION_INT_SUBJECT        "int-subject"
 #define NM_ACTIVE_CONNECTION_INT_MASTER         "int-master"
 #define NM_ACTIVE_CONNECTION_INT_MASTER_READY   "int-master-ready"
+#define NM_ACTIVE_CONNECTION_INT_ACTIVATION_TYPE "int-activation-type"
 
 /* Internal signals*/
 #define NM_ACTIVE_CONNECTION_DEVICE_CHANGED          "device-changed"
@@ -164,5 +165,7 @@ void          nm_active_connection_set_assumed (NMActiveConnection *self,
 gboolean      nm_active_connection_get_assumed (NMActiveConnection *self);
 
 void          nm_active_connection_clear_secrets (NMActiveConnection *self);
+
+void          nm_active_connection_set_activation_type_full (NMActiveConnection *self);
 
 #endif /* __NETWORKMANAGER_ACTIVE_CONNECTION_H__ */

@@ -666,6 +666,59 @@ check_activating_devices (NMPolicy *self)
 	g_object_thaw_notify (object);
 }
 
+static NMSettingsConnection *
+_find_connection_to_assume (NMPolicy *self,
+                            NMDevice *device)
+{
+	NMPolicyPrivate *priv;
+	NMSettingsConnection *connection;
+	gs_free const char *uuid = NULL;
+	const NMPlatformLink *pllink;
+
+	uuid = nm_device_steal_connection_uuid_to_assume (device);
+	if (!uuid)
+		return NULL;
+
+	priv = NM_POLICY_GET_PRIVATE (self);
+
+	connection = nm_settings_get_connection_by_uuid (priv->settings, uuid);
+	if (!connection)
+		return NULL;
+
+	if (nm_manager_get_connection_device (priv->manager, NM_CONNECTION (connection))) {
+		/* if the connection is already active on another device, it cannot be
+		 * activated here. */
+		return NULL;
+	}
+
+	if (!nm_device_check_connection_available (device,
+	                                           NM_CONNECTION (connection),
+	                                           NM_DEVICE_CHECK_CON_AVAILABLE_FOR_USER_REQUEST,
+	                                           NULL)) {
+		/* the connection must be compatible and available on the device. */
+		return NULL;
+	}
+
+	/* only if the device exists. */
+	pllink = nm_platform_link_get (NM_PLATFORM_GET,
+	                               nm_device_get_ip_ifindex (device));
+	if (!pllink)
+		return NULL;
+
+	if (nm_setting_connection_get_slave_type (nm_connection_get_setting_connection (NM_CONNECTION (connection)))) {
+		/* a slave. Is the link still enslaved? */
+		if (pllink->master <= 0)
+			return NULL;
+	} else {
+		/* the device must be up and not a slave. */
+		if (   pllink->master > 0
+		    || !NM_FLAGS_HAS (pllink->n_ifi_flags, IFF_UP))
+			return NULL;
+	}
+
+	return connection;
+}
+
 typedef struct {
 	NMPolicy *policy;
 	NMDevice *device;
@@ -694,8 +747,7 @@ auto_activate_device (NMPolicy *self,
 	NMPolicyPrivate *priv;
 	NMSettingsConnection *best_connection;
 	gs_free char *specific_object = NULL;
-	GPtrArray *connections;
-	GSList *connection_list;
+	gboolean assume = FALSE;
 	guint i;
 
 	nm_assert (NM_IS_POLICY (self));
@@ -710,30 +762,37 @@ auto_activate_device (NMPolicy *self,
 	if (nm_device_get_act_request (device))
 		return;
 
-	connection_list = nm_manager_get_activatable_connections (priv->manager);
-	if (!connection_list)
-		return;
+	best_connection = _find_connection_to_assume (self, device);
+	if (best_connection)
+		assume = TRUE;
+	else {
+		GSList *connection_list;
+		gs_unref_ptrarray GPtrArray *connections = NULL;
 
-	connections = _nm_utils_copy_slist_to_array (connection_list, NULL, NULL);
-	g_slist_free (connection_list);
+		connection_list = nm_manager_get_activatable_connections (priv->manager);
+		if (!connection_list)
+			return;
 
-	/* sort is stable (which is important at this point) so that connections
-	 * with same priority are still sorted by last-connected-timestamp. */
-	g_ptr_array_sort (connections, (GCompareFunc) nm_utils_cmp_connection_by_autoconnect_priority);
+		connections = _nm_utils_copy_slist_to_array (connection_list, NULL, NULL);
+		g_slist_free (connection_list);
 
-	/* Find the first connection that should be auto-activated */
-	best_connection = NULL;
-	for (i = 0; i < connections->len; i++) {
-		NMSettingsConnection *candidate = NM_SETTINGS_CONNECTION (connections->pdata[i]);
+		/* sort is stable (which is important at this point) so that connections
+		 * with same priority are still sorted by last-connected-timestamp. */
+		g_ptr_array_sort (connections, (GCompareFunc) nm_utils_cmp_connection_by_autoconnect_priority);
 
-		if (!nm_settings_connection_can_autoconnect (candidate))
-			continue;
-		if (nm_device_can_auto_connect (device, (NMConnection *) candidate, &specific_object)) {
-			best_connection = candidate;
-			break;
+		/* Find the first connection that should be auto-activated */
+		best_connection = NULL;
+		for (i = 0; i < connections->len; i++) {
+			NMSettingsConnection *candidate = NM_SETTINGS_CONNECTION (connections->pdata[i]);
+
+			if (!nm_settings_connection_can_autoconnect (candidate))
+				continue;
+			if (nm_device_can_auto_connect (device, (NMConnection *) candidate, &specific_object)) {
+				best_connection = candidate;
+				break;
+			}
 		}
 	}
-	g_ptr_array_free (connections, TRUE);
 
 	if (best_connection) {
 		GError *error = NULL;
@@ -748,6 +807,9 @@ auto_activate_device (NMPolicy *self,
 		                                     specific_object,
 		                                     device,
 		                                     subject,
+		                                     assume
+		                                         ? NM_ACTIVATION_TYPE_ASSUME
+		                                         : NM_ACTIVATION_TYPE_FULL,
 		                                     &error)) {
 			_LOGI (LOGD_DEVICE, "connection '%s' auto-activation failed: (%d) %s",
 			       nm_settings_connection_get_id (best_connection),
@@ -1153,6 +1215,7 @@ activate_secondary_connections (NMPolicy *self,
 		                                     nm_exported_object_get_path (NM_EXPORTED_OBJECT (req)),
 		                                     device,
 		                                     nm_active_connection_get_subject (NM_ACTIVE_CONNECTION (req)),
+		                                     NM_ACTIVATION_TYPE_FULL,
 		                                     &error);
 		if (ac)
 			secondary_ac_list = g_slist_append (secondary_ac_list, g_object_ref (ac));
@@ -1555,6 +1618,7 @@ vpn_connection_retry_after_failure (NMVpnConnection *vpn, NMPolicy *self)
 	                                     NULL,
 	                                     NULL,
 	                                     nm_active_connection_get_subject (ac),
+	                                     NM_ACTIVATION_TYPE_FULL,
 	                                     &error)) {
 		_LOGW (LOGD_DEVICE, "VPN '%s' reconnect failed: %s",
 		       nm_settings_connection_get_id (connection),

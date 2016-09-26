@@ -220,6 +220,13 @@ typedef struct _NMDevicePrivate {
 	NMDeviceState state;
 	NMDeviceStateReason state_reason;
 	QueuedState   queued_state;
+
+	/* The connection-uuid we preferrably try to autoactivate in a non-destructive way
+	 * (that is: assuming the connection).
+	 * The value is only piggy-backed here and used by NMPolicy to find the connection
+	 * to assume. */
+	char *connection_uuid_to_assume;
+
 	guint queued_ip4_config_id;
 	guint queued_ip6_config_id;
 	GSList *pending_actions;
@@ -3467,6 +3474,48 @@ nm_device_check_slave_connection_compatible (NMDevice *self, NMConnection *slave
 		return FALSE;
 
 	return strcmp (connection_type, slave_type) == 0;
+}
+
+void
+nm_device_set_connection_uuid_to_assume (NMDevice *self,
+                                         const char *connection_uuid_to_assume)
+{
+	NMDevicePrivate *priv;
+
+	g_return_if_fail (NM_IS_DEVICE (self));
+
+	priv = NM_DEVICE_GET_PRIVATE (self);
+
+	if (!connection_uuid_to_assume) {
+		if (priv->connection_uuid_to_assume) {
+			_LOGD (LOGD_DEVICE, "connection-uuid-to-assume: clear %s",
+			       priv->connection_uuid_to_assume);
+			nm_clear_g_free (&priv->connection_uuid_to_assume);
+		}
+	} else if (   !priv->connection_uuid_to_assume
+	           || !nm_streq (priv->connection_uuid_to_assume, connection_uuid_to_assume)) {
+		_LOGD (LOGD_DEVICE, "connection-uuid-to-assume: set %s%s%s%s",
+		       connection_uuid_to_assume,
+		       NM_PRINT_FMT_QUOTED (priv->connection_uuid_to_assume, " (was \"", priv->connection_uuid_to_assume, ")", ""));
+		g_free (priv->connection_uuid_to_assume);
+		priv->connection_uuid_to_assume = g_strdup (connection_uuid_to_assume);
+	}
+}
+
+char *
+nm_device_steal_connection_uuid_to_assume (NMDevice *self)
+{
+	NMDevicePrivate *priv;
+
+	g_return_val_if_fail (NM_IS_DEVICE (self), NULL);
+
+	priv = NM_DEVICE_GET_PRIVATE (self);
+
+	if (priv->connection_uuid_to_assume) {
+		_LOGD (LOGD_DEVICE, "connection-uuid-to-assume: return %s",
+		       priv->connection_uuid_to_assume);
+	}
+	return g_steal_pointer (&priv->connection_uuid_to_assume);
 }
 
 /**
@@ -11140,6 +11189,9 @@ _set_state_full (NMDevice *self,
 
 	old_state = priv->state;
 
+	if (state > NM_DEVICE_STATE_DISCONNECTED)
+		nm_device_set_connection_uuid_to_assume (self, NULL);
+
 	/* Do nothing if state isn't changing, but as a special case allow
 	 * re-setting UNAVAILABLE if the device is missing firmware so that we
 	 * can retry device initialization.
@@ -12367,6 +12419,7 @@ finalize (GObject *object)
 	g_free (priv->type_desc);
 	g_free (priv->type_description);
 	g_free (priv->dhcp_anycast_address);
+	g_free (priv->connection_uuid_to_assume);
 
 	g_hash_table_unref (priv->ip6_saved_properties);
 	g_hash_table_unref (priv->available_connections);

@@ -3657,3 +3657,9 @@ nm_utils_get_reverse_dns_domains_ip6 (const struct in6_addr *ip, guint8 plen, GP
 
 #undef N_SHIFT
 }
+
+NM_UTILS_LOOKUP_STR_DEFINE (nm_activation_type_to_string, NMActivationType,
+	NM_UTILS_LOOKUP_DEFAULT_WARN (NULL),
+	NM_UTILS_LOOKUP_STR_ITEM (NM_ACTIVATION_TYPE_FULL,   "full"),
+	NM_UTILS_LOOKUP_STR_ITEM (NM_ACTIVATION_TYPE_ASSUME, "assume"),
+);

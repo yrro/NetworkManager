@@ -419,6 +419,10 @@ gboolean nm_device_complete_connection (NMDevice *device,
 gboolean nm_device_check_connection_compatible (NMDevice *device, NMConnection *connection);
 gboolean nm_device_check_slave_connection_compatible (NMDevice *device, NMConnection *connection);
 
+void nm_device_set_connection_uuid_to_assume (NMDevice *self,
+                                              const char *connection_uuid_to_assume);
+char *nm_device_steal_connection_uuid_to_assume (NMDevice *self);
+
 gboolean nm_device_uses_assumed_connection (NMDevice *device);
 
 gboolean nm_device_unmanage_on_quit (NMDevice *self);

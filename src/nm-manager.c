@@ -68,6 +68,7 @@ static NMActiveConnection *_new_active_connection (NMManager *self,
                                                    const char *specific_object,
                                                    NMDevice *device,
                                                    NMAuthSubject *subject,
+                                                   NMActivationType activation_type,
                                                    GError **error);
 
 static void policy_activating_device_changed (GObject *object, GParamSpec *pspec, gpointer user_data);
@@ -1695,6 +1696,23 @@ get_existing_connection (NMManager *self, NMDevice *device, gboolean *out_genera
 	                                                             nm_device_get_ip6_route_metric (device),
 	                                                             match_connection_filter,
 	                                                             device));
+
+
+	/* TODO: connection assumption as it existed is going away. For now, just short-cut
+	 * it. Afterwards, a lot of code can be removed. */
+	if (matched) {
+		_LOGI (LOGD_DEVICE, "(%s): would assume connection '%s', but no",
+		       nm_device_get_iface (device),
+		       nm_settings_connection_get_id (matched));
+	} else {
+		_LOGI (LOGD_DEVICE, "(%s): would assume generated connection '%s', but no",
+		       nm_device_get_iface (device),
+		       nm_connection_get_id (connection));
+	}
+	g_object_unref (connection);
+	return NULL;
+
+
 	if (matched) {
 		_LOGI (LOGD_DEVICE, "(%s): found matching connection '%s'",
 		       nm_device_get_iface (device),
@@ -1746,7 +1764,7 @@ assume_connection (NMManager *self, NMDevice *device, NMSettingsConnection *conn
 	g_return_val_if_fail (nm_device_get_state (device) >= NM_DEVICE_STATE_DISCONNECTED, FALSE);
 
 	subject = nm_auth_subject_new_internal ();
-	active = _new_active_connection (self, NM_CONNECTION (connection), NULL, NULL, device, subject, &error);
+	active = _new_active_connection (self, NM_CONNECTION (connection), NULL, NULL, device, subject, NM_ACTIVATION_TYPE_ASSUME, &error);
 	g_object_unref (subject);
 
 	if (!active) {
@@ -1880,7 +1898,10 @@ device_realized (NMDevice *device,
 }
 
 static void
-_device_realize_finish (NMManager *self, NMDevice *device, const NMPlatformLink *plink)
+_device_realize_finish (NMManager *self,
+                        NMDevice *device,
+                        const NMPlatformLink *plink,
+                        const char *connection_uuid_to_assume)
 {
 	g_return_if_fail (NM_IS_MANAGER (self));
 	g_return_if_fail (NM_IS_DEVICE (device));
@@ -1892,6 +1913,8 @@ _device_realize_finish (NMManager *self, NMDevice *device, const NMPlatformLink 
 
 	if (recheck_assume_connection (self, device))
 		return;
+
+	nm_device_set_connection_uuid_to_assume (device, connection_uuid_to_assume);
 
 	/* if we failed to assume a connection for the managed device, but the device
 	 * is still unavailable. Set UNAVAILABLE state again, this time with NOW_MANAGED. */
@@ -2043,7 +2066,7 @@ factory_device_added_cb (NMDeviceFactory *factory,
 	                             NULL,
 	                             &error)) {
 		add_device (self, device, NULL);
-		_device_realize_finish (self, device, NULL);
+		_device_realize_finish (self, device, NULL, NULL);
 	} else {
 		_LOGW (LOGD_DEVICE, "(%s): failed to realize device: %s",
 		       nm_device_get_iface (device), error->message);
@@ -2120,7 +2143,7 @@ platform_link_added (NMManager *self,
 		                                    &compatible,
 		                                    &error)) {
 			/* Success */
-			_device_realize_finish (self, candidate, plink);
+			_device_realize_finish (self, candidate, plink, NULL);
 			return;
 		}
 
@@ -2184,7 +2207,8 @@ platform_link_added (NMManager *self,
 		                             NULL,
 		                             &error)) {
 			add_device (self, device, NULL);
-			_device_realize_finish (self, device, plink);
+			_device_realize_finish (self, device, plink,
+			                        dev_state ? dev_state->connection_uuid : NULL);
 		} else {
 			_LOGW (LOGD_DEVICE, "%s: failed to realize device: %s",
 			       plink->name, error->message);
@@ -2330,7 +2354,7 @@ nm_manager_get_device_paths (NMManager *self)
 	return (const char **) g_ptr_array_free (paths, FALSE);
 }
 
-static NMDevice *
+NMDevice *
 nm_manager_get_connection_device (NMManager *self,
                                   NMConnection *connection)
 {
@@ -2657,6 +2681,7 @@ ensure_master_active_connection (NMManager *self,
 					                                            NULL,
 					                                            master_device,
 					                                            subject,
+					                                            NM_ACTIVATION_TYPE_FULL,
 					                                            error);
 					g_slist_free (connections);
 					return master_ac;
@@ -2704,6 +2729,7 @@ ensure_master_active_connection (NMManager *self,
 			                                            NULL,
 			                                            candidate,
 			                                            subject,
+			                                            NM_ACTIVATION_TYPE_FULL,
 			                                            error);
 			return master_ac;
 		}
@@ -2829,6 +2855,7 @@ autoconnect_slaves (NMManager *self,
 			                                NULL,
 			                                nm_manager_get_best_device_for_connection (self, NM_CONNECTION (slave_connection), FALSE),
 			                                subject,
+			                                NM_ACTIVATION_TYPE_FULL,
 			                                &local_err);
 			if (local_err) {
 				_LOGW (LOGD_CORE, "Slave connection activation failed: %s", local_err->message);
@@ -2986,7 +3013,8 @@ _internal_activate_device (NMManager *self, NMActiveConnection *active, GError *
 				return FALSE;
 			}
 
-			parent_ac = nm_manager_activate_connection (self, parent_con, NULL, NULL, parent, subject, error);
+			parent_ac = nm_manager_activate_connection (self, parent_con, NULL, NULL, parent,
+			                                            subject, NM_ACTIVATION_TYPE_FULL, error);
 			if (!parent_ac) {
 				g_prefix_error (error, "%s failed to activate parent: ", nm_device_get_iface (device));
 				return FALSE;
@@ -3172,6 +3200,7 @@ _new_active_connection (NMManager *self,
                         const char *specific_object,
                         NMDevice *device,
                         NMAuthSubject *subject,
+                        NMActivationType activation_type,
                         GError **error)
 {
 	NMSettingsConnection *settings_connection = NULL;
@@ -3196,6 +3225,9 @@ _new_active_connection (NMManager *self,
 
 	is_vpn = nm_connection_is_type (NM_CONNECTION (connection), NM_SETTING_VPN_SETTING_NAME);
 
+	if (is_vpn && activation_type != NM_ACTIVATION_TYPE_FULL)
+		g_return_val_if_reached (NULL);
+
 	if (NM_IS_SETTINGS_CONNECTION (connection))
 		settings_connection = (NMSettingsConnection *) connection;
 
@@ -3211,7 +3243,8 @@ _new_active_connection (NMManager *self,
 	                                                  applied,
 	                                                  specific_object,
 	                                                  subject,
-	                                                  device);
+	                                                  device,
+	                                                  activation_type);
 }
 
 static void
@@ -3263,6 +3296,8 @@ _internal_activation_auth_done (NMActiveConnection *active,
  * @specific_object: the specific object path, if any, for the activation
  * @device: the #NMDevice to activate @connection on
  * @subject: the subject which requested activation
+ * @activation_type: whether to assume the connection. That is, take over gracefully,
+ *   non-destructible.
  * @error: return location for an error
  *
  * Begins a new internally-initiated activation of @connection on @device.
@@ -3282,6 +3317,7 @@ nm_manager_activate_connection (NMManager *self,
                                 const char *specific_object,
                                 NMDevice *device,
                                 NMAuthSubject *subject,
+                                NMActivationType activation_type,
                                 GError **error)
 {
 	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (self);
@@ -3328,6 +3364,7 @@ nm_manager_activate_connection (NMManager *self,
 	                                 specific_object,
 	                                 device,
 	                                 subject,
+	                                 activation_type,
 	                                 error);
 	if (active) {
 		priv->authorizing_connections = g_slist_prepend (priv->authorizing_connections, active);
@@ -3583,6 +3620,7 @@ impl_manager_activate_connection (NMManager *self,
 	                                 specific_object_path,
 	                                 device,
 	                                 subject,
+	                                 NM_ACTIVATION_TYPE_FULL,
 	                                 &error);
 	if (!active)
 		goto error;
@@ -3791,6 +3829,7 @@ impl_manager_add_and_activate_connection (NMManager *self,
 	                                 specific_object_path,
 	                                 device,
 	                                 subject,
+	                                 NM_ACTIVATION_TYPE_FULL,
 	                                 &error);
 	if (!active)
 		goto error;

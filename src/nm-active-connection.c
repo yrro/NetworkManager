@@ -58,6 +58,8 @@ typedef struct _NMActiveConnectionPrivate {
 
 	gboolean assumed;
 
+	NMActivationType activation_type;
+
 	NMAuthChain *chain;
 	const char *wifi_shared_permission;
 	NMActiveConnectionAuthResultFunc result_func;
@@ -88,6 +90,7 @@ NM_GOBJECT_PROPERTIES_DEFINE (NMActiveConnection,
 	PROP_INT_SUBJECT,
 	PROP_INT_MASTER,
 	PROP_INT_MASTER_READY,
+	PROP_INT_ACTIVATION_TYPE,
 );
 
 enum {
@@ -779,6 +782,16 @@ nm_active_connection_set_parent (NMActiveConnection *self, NMActiveConnection *p
 	g_object_weak_ref ((GObject *) priv->parent, parent_destroyed, self);
 }
 
+void
+nm_active_connection_set_activation_type_full (NMActiveConnection *self)
+{
+	NMActiveConnectionPrivate *priv;
+
+	g_return_if_fail (NM_IS_ACTIVE_CONNECTION (self));
+
+	priv = NM_ACTIVE_CONNECTION_GET_PRIVATE (self);
+}
+
 /*****************************************************************************/
 
 static void
@@ -1041,6 +1054,7 @@ set_property (GObject *object, guint prop_id,
 	const char *tmp;
 	NMSettingsConnection *con;
 	NMConnection *acon;
+	NMActivationType activation_type;
 
 	switch (prop_id) {
 	case PROP_INT_SETTINGS_CONNECTION:
@@ -1082,6 +1096,13 @@ set_property (GObject *object, guint prop_id,
 		break;
 	case PROP_MASTER:
 		break;
+	case PROP_INT_ACTIVATION_TYPE:
+		/* construct-only */
+		activation_type = g_value_get_uint (value);
+		if (!NM_IN_SET (activation_type, NM_ACTIVATION_TYPE_FULL, NM_ACTIVATION_TYPE_ASSUME))
+			g_return_if_reached ();
+		priv->activation_type = activation_type;
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 		break;
@@ -1101,6 +1122,7 @@ nm_active_connection_init (NMActiveConnection *self)
 	_LOGT ("creating");
 
 	priv->version_id = _version_id_new ();
+	priv->activation_type = NM_ACTIVATION_TYPE_FULL;
 }
 
 static void
@@ -1119,7 +1141,9 @@ constructed (GObject *object)
 	if (priv->applied_connection)
 		nm_connection_clear_secrets (priv->applied_connection);
 
-	_LOGD ("constructed (%s, version-id %llu)", G_OBJECT_TYPE_NAME (self), (long long unsigned) priv->version_id);
+	_LOGD ("constructed (%s, version-id %llu, activation-type %s)",
+	       G_OBJECT_TYPE_NAME (self), (long long unsigned) priv->version_id,
+	       nm_activation_type_to_string (priv->activation_type));
 
 	g_return_if_fail (priv->subject);
 }
@@ -1303,6 +1327,13 @@ nm_active_connection_class_init (NMActiveConnectionClass *ac_class)
 	     g_param_spec_boolean (NM_ACTIVE_CONNECTION_INT_MASTER_READY, "", "",
 	                           FALSE, G_PARAM_READABLE |
 	                           G_PARAM_STATIC_STRINGS);
+
+	obj_properties[PROP_INT_ACTIVATION_TYPE] =
+	     g_param_spec_uint (NM_ACTIVE_CONNECTION_INT_ACTIVATION_TYPE, "", "",
+	                        0, G_MAXUINT32, NM_ACTIVATION_TYPE_FULL,
+	                        G_PARAM_WRITABLE |
+	                        G_PARAM_CONSTRUCT_ONLY |
+	                        G_PARAM_STATIC_STRINGS);
 
 	g_object_class_install_properties (object_class, _PROPERTY_ENUMS_LAST, obj_properties);
 

@@ -220,6 +220,7 @@ activate:
 			                                     NULL,
 			                                     device,
 			                                     subject,
+			                                     FALSE,
 			                                     &local_error)) {
 				_LOGW ("rollback: reactivation of connection %s/%s failed: %s",
 				       nm_connection_get_id ((NMConnection *) connection),

@@ -86,6 +86,9 @@ NMState       nm_manager_get_state                     (NMManager *manager);
 const GSList *nm_manager_get_active_connections        (NMManager *manager);
 GSList *      nm_manager_get_activatable_connections   (NMManager *manager);
 
+NMDevice *    nm_manager_get_connection_device (NMManager *self,
+                                                NMConnection *connection);
+
 void          nm_manager_write_device_state (NMManager *manager);
 
 /* Device handling */
@@ -109,6 +112,7 @@ NMActiveConnection *nm_manager_activate_connection     (NMManager *manager,
                                                         const char *specific_object,
                                                         NMDevice *device,
                                                         NMAuthSubject *subject,
+                                                        NMActivationType activation_type,
                                                         GError **error);
 
 gboolean            nm_manager_deactivate_connection   (NMManager *manager,
