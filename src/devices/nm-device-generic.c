@@ -120,6 +120,12 @@ update_connection (NMDevice *device, NMConnection *connection)
 	              NULL);
 }
 
+static gboolean
+get_unmanaged_by_default (NMDevice *self)
+{
+	return TRUE;
+}
+
 /*****************************************************************************/
 
 static void
@@ -163,22 +169,6 @@ nm_device_generic_init (NMDeviceGeneric *self)
 {
 }
 
-static GObject *
-constructor (GType type,
-             guint n_construct_params,
-             GObjectConstructParam *construct_params)
-{
-	GObject *object;
-
-	object = G_OBJECT_CLASS (nm_device_generic_parent_class)->constructor (type,
-	                                                                       n_construct_params,
-	                                                                       construct_params);
-
-	nm_device_set_unmanaged_flags ((NMDevice *) object, NM_UNMANAGED_BY_DEFAULT, TRUE);
-
-	return object;
-}
-
 NMDevice *
 nm_device_generic_new (const NMPlatformLink *plink, gboolean nm_plugin_missing)
 {
@@ -211,7 +201,6 @@ nm_device_generic_class_init (NMDeviceGenericClass *klass)
 
 	NM_DEVICE_CLASS_DECLARE_TYPES (klass, NM_SETTING_GENERIC_SETTING_NAME, NM_LINK_TYPE_ANY)
 
-	object_class->constructor = constructor;
 	object_class->dispose = dispose;
 	object_class->get_property = get_property;
 	object_class->set_property = set_property;
@@ -221,6 +210,7 @@ nm_device_generic_class_init (NMDeviceGenericClass *klass)
 	parent_class->get_type_description = get_type_description;
 	parent_class->check_connection_compatible = check_connection_compatible;
 	parent_class->update_connection = update_connection;
+	parent_class->get_unmanaged_by_default = get_unmanaged_by_default;
 
 	obj_properties[PROP_TYPE_DESCRIPTION] =
 	     g_param_spec_string (NM_DEVICE_GENERIC_TYPE_DESCRIPTION, "", "",

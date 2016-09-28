@@ -82,12 +82,12 @@ update_properties (NMDevice *device)
 }
 
 static gboolean
-can_unmanaged_external_down (NMDevice *self)
+get_unmanaged_by_default (NMDevice *self)
 {
-	/* Unless running in a container, an udev rule causes these to be
-	 * unmanaged. If there's no udev then we're probably in a container
-	 * and should IFF_UP and configure the veth ourselves even if we
-	 * didn't create it. */
+	/* veth devices are not unmanaged-by-default.
+	 * We rely on an udev rule to mark them as unmanaged-user-udev,
+	 * which is not present inside a container, where we actually
+	 * want to manage veth devices. */
 	return FALSE;
 }
 
@@ -145,7 +145,7 @@ nm_device_veth_class_init (NMDeviceVethClass *klass)
 	object_class->get_property = get_property;
 	object_class->notify = notify;
 
-	device_class->can_unmanaged_external_down = can_unmanaged_external_down;
+	device_class->get_unmanaged_by_default = get_unmanaged_by_default;
 	device_class->link_changed = link_changed;
 
 	obj_properties[PROP_PEER] =
