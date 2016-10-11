@@ -321,25 +321,27 @@ nm_session_monitor_user_to_uid (const char *user, uid_t *out_uid)
  * to prefer an agent from an active session over an agent from an
  * inactive one.
  *
- * Returns: %FALSE if @error is set otherwise %TRUE if the given @uid is
- * logged into an active session.
+ * Returns: %TRUE if the given @uid is logged into an active session (or
+ *     no session-tracking is compiled in), %FALSE otherwise
  */
 gboolean
 nm_session_monitor_session_exists (NMSessionMonitor *self,
                                    uid_t uid,
                                    gboolean active)
 {
+	gboolean ret;
+
 	g_return_val_if_fail (NM_IS_SESSION_MONITOR (self), FALSE);
 
 #if defined (SESSION_TRACKING_SYSTEMD)
-	if (st_sd_session_exists (self, uid, active))
-		return TRUE;
+	ret = st_sd_session_exists (self, uid, active);
 #elif defined (SESSION_TRACKING_CONSOLEKIT)
-	if (ck_session_exists (self, uid, active))
-		return TRUE;
+	ret = ck_session_exists (self, uid, active);
+#else
+	ret = TRUE;
 #endif
 
-	return FALSE;
+	return ret;
 }
 
 /*****************************************************************************/
