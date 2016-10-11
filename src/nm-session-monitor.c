@@ -46,14 +46,12 @@ static guint signals[LAST_SIGNAL] = { 0 };
 struct _NMSessionMonitor {
 	GObject parent;
 
-#ifdef SESSION_TRACKING_SYSTEMD
+#if defined (SESSION_TRACKING_SYSTEMD)
 	struct {
 		sd_login_monitor *monitor;
 		guint watch;
 	} sd;
-#endif
-
-#ifdef SESSION_TRACKING_CONSOLEKIT
+#elif defined (SESSION_TRACKING_CONSOLEKIT)
 	struct {
 		GFileMonitor *monitor;
 		GHashTable *cache;
@@ -70,7 +68,7 @@ G_DEFINE_TYPE (NMSessionMonitor, nm_session_monitor, G_TYPE_OBJECT);
 
 /*****************************************************************************/
 
-#ifdef SESSION_TRACKING_SYSTEMD
+#if defined (SESSION_TRACKING_SYSTEMD)
 static gboolean
 st_sd_session_exists (NMSessionMonitor *monitor, uid_t uid, gboolean active)
 {
@@ -126,11 +124,9 @@ st_sd_finalize (NMSessionMonitor *monitor)
 	g_clear_pointer (&monitor->sd.monitor, sd_login_monitor_unref);
 	g_source_remove (monitor->sd.watch);
 }
-#endif /* SESSION_TRACKING_SYSTEMD */
 
-/*****************************************************************************/
+#elif defined (SESSION_TRACKING_CONSOLEKIT)
 
-#ifdef SESSION_TRACKING_CONSOLEKIT
 typedef struct {
 	gboolean active;
 } CkSession;
@@ -246,9 +242,9 @@ ck_init (NMSessionMonitor *monitor)
 		if ((monitor->ck.monitor = g_file_monitor_file (file, G_FILE_MONITOR_NONE, NULL, &error))) {
 			monitor->ck.cache = g_hash_table_new_full (g_direct_hash, g_direct_equal, NULL, g_free);
 			g_signal_connect (monitor->ck.monitor,
-							  "changed",
-							  G_CALLBACK (ck_changed),
-							  monitor);
+			                 "changed",
+			                 G_CALLBACK (ck_changed),
+			                 monitor);
 		} else {
 			nm_log_err (LOGD_CORE, "Error monitoring " CKDB_PATH ": %s", error->message);
 			g_clear_error (&error);
@@ -335,12 +331,10 @@ nm_session_monitor_session_exists (NMSessionMonitor *self,
 {
 	g_return_val_if_fail (NM_IS_SESSION_MONITOR (self), FALSE);
 
-#ifdef SESSION_TRACKING_SYSTEMD
+#if defined (SESSION_TRACKING_SYSTEMD)
 	if (st_sd_session_exists (self, uid, active))
 		return TRUE;
-#endif
-
-#ifdef SESSION_TRACKING_CONSOLEKIT
+#elif defined (SESSION_TRACKING_CONSOLEKIT)
 	if (ck_session_exists (self, uid, active))
 		return TRUE;
 #endif
@@ -353,11 +347,9 @@ nm_session_monitor_session_exists (NMSessionMonitor *self,
 static void
 nm_session_monitor_init (NMSessionMonitor *monitor)
 {
-#ifdef SESSION_TRACKING_SYSTEMD
+#if defined (SESSION_TRACKING_SYSTEMD)
 	st_sd_init (monitor);
-#endif
-
-#ifdef SESSION_TRACKING_CONSOLEKIT
+#elif defined (SESSION_TRACKING_CONSOLEKIT)
 	ck_init (monitor);
 #endif
 }
@@ -365,11 +357,9 @@ nm_session_monitor_init (NMSessionMonitor *monitor)
 static void
 finalize (GObject *object)
 {
-#ifdef SESSION_TRACKING_SYSTEMD
+#if defined (SESSION_TRACKING_SYSTEMD)
 	st_sd_finalize (NM_SESSION_MONITOR (object));
-#endif
-
-#ifdef SESSION_TRACKING_CONSOLEKIT
+#elif defined (SESSION_TRACKING_CONSOLEKIT)
 	ck_finalize (NM_SESSION_MONITOR (object));
 #endif
 
