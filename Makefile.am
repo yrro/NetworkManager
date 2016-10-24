@@ -212,6 +212,8 @@ nodist_introspection_libnmdbus_la_SOURCES = \
 	introspection/nmdbus-dhcp4-config.h \
 	introspection/nmdbus-dhcp6-config.c \
 	introspection/nmdbus-dhcp6-config.h \
+	introspection/nmdbus-dns-manager.c \
+	introspection/nmdbus-dns-manager.h \
 	introspection/nmdbus-ip4-config.c \
 	introspection/nmdbus-ip4-config.h \
 	introspection/nmdbus-ip6-config.c \
@@ -315,6 +317,7 @@ EXTRA_DIST += \
 	introspection/nm-device.xml \
 	introspection/nm-dhcp4-config.xml \
 	introspection/nm-dhcp6-config.xml \
+	introspection/nm-dns-manager.xml \
 	introspection/nm-ip4-config.xml \
 	introspection/nm-ip6-config.xml \
 	introspection/nm-manager.xml \
