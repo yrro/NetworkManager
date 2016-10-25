@@ -669,6 +669,7 @@ libnm_libnm_la_private_headers = \
 	libnm/nm-device-private.h \
 	libnm/nm-dhcp4-config.h \
 	libnm/nm-dhcp6-config.h \
+	libnm/nm-dns-manager.h \
 	libnm/nm-ip4-config.h \
 	libnm/nm-ip6-config.h \
 	libnm/nm-manager.h \
@@ -702,6 +703,7 @@ libnm_libnm_la_sources = \
 	libnm/nm-dhcp-config.c \
 	libnm/nm-dhcp4-config.c \
 	libnm/nm-dhcp6-config.c \
+	libnm/nm-dns-manager.c \
 	libnm/nm-enum-types.c \
 	libnm/nm-ip-config.c \
 	libnm/nm-ip4-config.c \

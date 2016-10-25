@@ -1264,7 +1264,40 @@ class ObjectManager(dbus.service.Object):
         pass
 
 ###################################################################
+IFACE_DNS_MANAGER = 'org.freedesktop.NetworkManager.DnsManager'
 
+class DnsManager(dbus.service.Object):
+    def __init__(self, bus, object_path):
+        dbus.service.Object.__init__(self, bus, object_path)
+        self.props = {}
+        self.props['Mode'] = "dnsmasq"
+        self.props['RcManager'] = "symlink"
+        self.props['Configuration'] = dbus.Array([
+            dbus.Dictionary(
+                { 'nameservers' : dbus.Array(['1.2.3.4', '5.6.7.8'], 's'),
+                  'priority'    : dbus.Int32(100) },
+                'sv') ],
+            'a{sv}')
+
+    @dbus.service.method(dbus_interface=dbus.PROPERTIES_IFACE, in_signature='s', out_signature='a{sv}')
+    def GetAll(self, iface):
+        if iface != IFACE_DNS_MANAGER:
+            raise UnknownInterfaceException()
+        return self.props
+
+    @dbus.service.method(dbus_interface=dbus.PROPERTIES_IFACE, in_signature='ss', out_signature='v')
+    def Get(self, iface, name):
+        if iface != IFACE_DNS_MANAGER:
+            raise UnknownInterfaceException()
+        if not name in self.props.keys():
+            raise UnknownPropertyException()
+        return self.props[name]
+
+    @dbus.service.signal(IFACE_DNS_MANAGER, signature='a{sv}')
+    def PropertiesChanged(self, path):
+        pass
+
+###################################################################
 def stdin_cb(io, condition):
     mainloop.quit()
 
@@ -1276,13 +1309,14 @@ def main():
 
     random.seed()
 
-    global manager, settings, agent_manager, object_manager, bus
+    global manager, settings, agent_manager, dns_manager, object_manager, bus
 
     bus = dbus.SessionBus()
     object_manager = ObjectManager(bus, "/org/freedesktop")
     manager = NetworkManager(bus, "/org/freedesktop/NetworkManager")
     settings = Settings(bus, "/org/freedesktop/NetworkManager/Settings")
     agent_manager = AgentManager(bus, "/org/freedesktop/NetworkManager/AgentManager")
+    dns_manager = DnsManager(bus, "/org/freedesktop/NetworkManager/DnsManager")
 
     if not bus.request_name("org.freedesktop.NetworkManager"):
         sys.exit(1)
