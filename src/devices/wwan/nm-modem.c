@@ -29,6 +29,7 @@
 
 #include "nm-core-internal.h"
 #include "nm-platform.h"
+#include "nm-manager.h"
 #include "nm-setting-connection.h"
 #include "NetworkManagerUtils.h"
 #include "nm-device-private.h"
@@ -37,7 +38,6 @@
 #include "nm-act-request.h"
 #include "nm-ip4-config.h"
 #include "nm-ip6-config.h"
-#include "ppp-manager/nm-ppp-status.h"
 
 /*****************************************************************************/
 
@@ -559,8 +559,10 @@ ppp_stage3_ip_config_start (NMModem *self,
 	if (port_speed_is_zero (priv->data_port))
 		baud_override = 57600;
 
-	priv->ppp_manager = nm_ppp_manager_new (priv->data_port);
-	if (nm_ppp_manager_start (priv->ppp_manager, req, ppp_name, ip_timeout, baud_override, &error)) {
+	priv->ppp_manager = nm_manager_ppp_create (nm_manager_get (), priv->data_port, &error);
+	if (   priv->ppp_manager
+	    && nm_manager_ppp_start (nm_manager_get (), priv->ppp_manager, req, ppp_name,
+	                             ip_timeout, baud_override, &error)) {
 		g_signal_connect (priv->ppp_manager, NM_PPP_MANAGER_STATE_CHANGED,
 		                  G_CALLBACK (ppp_state_changed),
 		                  self);
@@ -581,7 +583,7 @@ ppp_stage3_ip_config_start (NMModem *self,
 		            error->message);
 		g_error_free (error);
 
-		nm_exported_object_clear_and_unexport (&priv->ppp_manager);
+		g_clear_object (&priv->ppp_manager);
 
 		*reason = NM_DEVICE_STATE_REASON_PPP_START_FAILED;
 		ret = NM_ACT_STAGE_RETURN_FAILURE;
@@ -1001,7 +1003,7 @@ deactivate_cleanup (NMModem *self, NMDevice *device)
 
 	priv->in_bytes = priv->out_bytes = 0;
 
-	nm_exported_object_clear_and_unexport (&priv->ppp_manager);
+	g_clear_object (&priv->ppp_manager);
 
 	if (device) {
 		g_return_if_fail (NM_IS_DEVICE (device));
@@ -1093,7 +1095,7 @@ ppp_manager_stop_ready (NMPPPManager *ppp_manager,
 {
 	GError *error = NULL;
 
-	if (!nm_ppp_manager_stop_finish (ppp_manager, res, &error)) {
+	if (!nm_manager_ppp_stop_finish (nm_manager_get (), ppp_manager, res, &error)) {
 		nm_log_warn (LOGD_MB, "(%s): cannot stop PPP manager: %s",
 		             nm_modem_get_uid (ctx->self),
 		             error->message);
@@ -1137,10 +1139,11 @@ deactivate_step (DeactivateContext *ctx)
 	case DEACTIVATE_CONTEXT_STEP_PPP_MANAGER_STOP:
 		/* If we have a PPP manager, stop it */
 		if (ctx->ppp_manager) {
-			nm_ppp_manager_stop (ctx->ppp_manager,
-			                     ctx->cancellable,
-			                     (GAsyncReadyCallback) ppp_manager_stop_ready,
-			                     ctx);
+			nm_manager_ppp_stop_async (nm_manager_get (),
+			                           ctx->ppp_manager,
+			                           ctx->cancellable,
+			                           (GAsyncReadyCallback) ppp_manager_stop_ready,
+			                           ctx);
 			return;
 		}
 		ctx->step++;

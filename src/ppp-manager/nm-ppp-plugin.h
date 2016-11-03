@@ -16,11 +16,38 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  *
  * Copyright (C) 2008 Novell, Inc.
- * Copyright (C) 2008 Red Hat, Inc.
+ * Copyright (C) 2008-2016 Red Hat, Inc.
  */
 
-#ifndef __NETWORKMANAGER_PPP_STATUS_H__
-#define __NETWORKMANAGER_PPP_STATUS_H__
+#ifndef __NETWORKMANAGER_PPP_PLUGIN_H__
+#define __NETWORKMANAGER_PPP_PLUGIN_H__
+
+typedef struct _NMPPPManager NMPPPManager;
+
+#define NM_PPP_MANAGER_PARENT_IFACE "parent-iface"
+#define NM_PPP_MANAGER_STATE_CHANGED "state-changed"
+
+typedef struct {
+	NMPPPManager *(*create) (const char *iface);
+
+	gboolean      (*start) (NMPPPManager *manager,
+	                        NMActRequest *req,
+	                        const char *ppp_name,
+	                        guint32 timeout_secs,
+	                        guint baud_override,
+	                        GError **err);
+
+	void          (*stop_async) (NMPPPManager *manager,
+	                             GCancellable *cancellable,
+	                             GAsyncReadyCallback callback,
+	                             gpointer user_data);
+
+	gboolean      (*stop_finish) (NMPPPManager *manager,
+	                              GAsyncResult *res,
+	                              GError **error);
+
+	void          (*stop_sync) (NMPPPManager *manager);
+} NMPPPOps;
 
 typedef enum {
 	NM_PPP_STATUS_UNKNOWN,
@@ -40,4 +67,4 @@ typedef enum {
 	NM_PPP_STATUS_MASTER
 } NMPPPStatus;
 
-#endif /* __NETWORKMANAGER_PPP_STATUS_H__ */
+#endif /* __NETWORKMANAGER_PPP_MANAGER_API_H__ */

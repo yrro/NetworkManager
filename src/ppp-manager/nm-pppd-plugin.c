@@ -38,7 +38,7 @@
 #include "nm-default.h"
 #include "nm-dbus-interface.h"
 #include "nm-pppd-plugin.h"
-#include "nm-ppp-status.h"
+#include "nm-ppp-plugin.h"
 
 int plugin_init (void);
 

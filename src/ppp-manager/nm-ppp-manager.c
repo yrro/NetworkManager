@@ -50,7 +50,7 @@
 #include "nm-ip4-config.h"
 #include "nm-ip6-config.h"
 #include "nm-pppd-plugin.h"
-#include "nm-ppp-status.h"
+#include "nm-ppp-plugin.h"
 
 #include "nmdbus-ppp-manager.h"
 
@@ -101,6 +101,9 @@ struct _NMPPPManager {
 struct _NMPPPManagerClass {
 	NMExportedObjectClass parent;
 };
+
+GType nm_ppp_manager_get_type (void);
+gboolean nm_plugin_init (GError **error);
 
 G_DEFINE_TYPE (NMPPPManager, nm_ppp_manager, NM_TYPE_EXPORTED_OBJECT)
 
@@ -887,7 +890,7 @@ pppoe_fill_defaults (NMSettingPpp *setting)
 #endif
 }
 
-gboolean
+static gboolean
 nm_ppp_manager_start (NMPPPManager *manager,
                       NMActRequest *req,
                       const char *ppp_name,
@@ -918,6 +921,8 @@ nm_ppp_manager_start (NMPPPManager *manager,
 	                     "PPP support is not enabled.");
 	return FALSE;
 #endif
+
+	nm_exported_object_export (NM_EXPORTED_OBJECT (manager));
 
 	priv->pid = 0;
 
@@ -975,6 +980,9 @@ nm_ppp_manager_start (NMPPPManager *manager,
 out:
 	if (ppp_cmd)
 		nm_cmd_line_destroy (ppp_cmd);
+
+	if (priv->pid <= 0)
+		nm_exported_object_unexport (NM_EXPORTED_OBJECT (manager));
 
 	return priv->pid > 0;
 }
@@ -1050,7 +1058,7 @@ stop_context_complete_if_cancelled (StopContext *ctx)
 	return FALSE;
 }
 
-gboolean
+static gboolean
 nm_ppp_manager_stop_finish (NMPPPManager *manager,
                             GAsyncResult *res,
                             GError **error)
@@ -1069,21 +1077,23 @@ kill_child_ready  (pid_t pid,
 	stop_context_complete (ctx);
 }
 
-void
-nm_ppp_manager_stop (NMPPPManager *manager,
-                     GCancellable *cancellable,
-                     GAsyncReadyCallback callback,
-                     gpointer user_data)
+static void
+nm_ppp_manager_stop_async (NMPPPManager *manager,
+                           GCancellable *cancellable,
+                           GAsyncReadyCallback callback,
+                           gpointer user_data)
 {
 	NMPPPManagerPrivate *priv = NM_PPP_MANAGER_GET_PRIVATE (manager);
 	StopContext *ctx;
+
+	nm_exported_object_unexport (NM_EXPORTED_OBJECT (manager));
 
 	ctx = g_slice_new0 (StopContext);
 	ctx->manager = g_object_ref (manager);
 	ctx->result = g_simple_async_result_new (G_OBJECT (manager),
 	                                         callback,
 	                                         user_data,
-	                                         nm_ppp_manager_stop);
+	                                         nm_ppp_manager_stop_async);
 
 	/* Setup cancellable */
 	ctx->cancellable = cancellable ? g_object_ref (cancellable) : NULL;
@@ -1108,6 +1118,18 @@ nm_ppp_manager_stop (NMPPPManager *manager,
 	                           (NMUtilsKillChildAsyncCb) kill_child_ready,
 	                           ctx);
 	priv->pid = 0;
+}
+
+static void
+nm_ppp_manager_stop_sync (NMPPPManager *manager)
+{
+	NMExportedObject *exported = NM_EXPORTED_OBJECT (manager);
+
+	if (nm_exported_object_is_exported (exported))
+		nm_exported_object_unexport (exported);
+
+	_ppp_cleanup (manager);
+	_ppp_kill (manager);
 }
 
 /*****************************************************************************/
@@ -1153,7 +1175,7 @@ nm_ppp_manager_init (NMPPPManager *manager)
 	NM_PPP_MANAGER_GET_PRIVATE (manager)->monitor_fd = -1;
 }
 
-NMPPPManager *
+static NMPPPManager *
 nm_ppp_manager_new (const char *iface)
 {
 	g_return_val_if_fail (iface != NULL, NULL);
@@ -1200,7 +1222,7 @@ nm_ppp_manager_class_init (NMPPPManagerClass *manager_class)
 	object_class->set_property = set_property;
 
 	exported_object_class->export_path = NM_DBUS_PATH "/PPP/%u";
-	exported_object_class->export_on_construction = TRUE;
+	// exported_object_class->export_on_construction = TRUE;
 
 	obj_properties[PROP_PARENT_IFACE] =
 	     g_param_spec_string (NM_PPP_MANAGER_PARENT_IFACE, "", "",
@@ -1255,3 +1277,10 @@ nm_ppp_manager_class_init (NMPPPManagerClass *manager_class)
 	                                        NULL);
 }
 
+NMPPPOps ppp_ops = {
+	.create       = nm_ppp_manager_new,
+	.start        = nm_ppp_manager_start,
+	.stop_async   = nm_ppp_manager_stop_async,
+	.stop_finish  = nm_ppp_manager_stop_finish,
+	.stop_sync    = nm_ppp_manager_stop_sync,
+};

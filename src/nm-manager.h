@@ -24,6 +24,7 @@
 
 #include "nm-exported-object.h"
 #include "nm-settings-connection.h"
+#include "ppp-manager/nm-ppp-plugin.h"
 
 #define NM_TYPE_MANAGER            (nm_manager_get_type ())
 #define NM_MANAGER(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), NM_TYPE_MANAGER, NMManager))
@@ -117,5 +118,25 @@ gboolean            nm_manager_deactivate_connection   (NMManager *manager,
                                                         GError **error);
 
 void                nm_manager_set_capability   (NMManager *self, NMCapability cap);
+
+NMPPPManager *      nm_manager_ppp_create      (NMManager *self, const char *iface, GError **error);
+gboolean            nm_manager_ppp_start       (NMManager *self,
+                                                NMPPPManager *ppp_manager,
+                                                NMActRequest *req,
+                                                const char *ppp_name,
+                                                guint32 timeout_secs,
+                                                guint baud_override,
+                                                GError **error);
+void                nm_manager_ppp_stop_async  (NMManager *self,
+                                                NMPPPManager *ppp_manager,
+                                                GCancellable *cancellable,
+                                                GAsyncReadyCallback callback,
+                                                gpointer user_data);
+gboolean            nm_manager_ppp_stop_finish (NMManager *self,
+                                                NMPPPManager *ppp_manager,
+                                                GAsyncResult *res,
+                                                GError **error);
+void                nm_manager_ppp_stop_sync   (NMManager *self,
+                                                NMPPPManager *ppp_manager);
 
 #endif /* __NETWORKMANAGER_MANAGER_H__ */

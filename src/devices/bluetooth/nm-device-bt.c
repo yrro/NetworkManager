@@ -28,7 +28,6 @@
 #include "nm-bluez-common.h"
 #include "nm-bluez-device.h"
 #include "nm-device-private.h"
-#include "ppp-manager/nm-ppp-manager.h"
 #include "nm-setting-connection.h"
 #include "nm-setting-bluetooth.h"
 #include "nm-setting-cdma.h"

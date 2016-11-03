@@ -22,7 +22,6 @@
 #ifndef __NETWORKMANAGER_MODEM_H__
 #define __NETWORKMANAGER_MODEM_H__
 
-#include "ppp-manager/nm-ppp-manager.h"
 #include "nm-device.h"
 
 #define NM_TYPE_MODEM            (nm_modem_get_type ())
