@@ -77,6 +77,7 @@
 %endif
 
 %bcond_without wifi
+%bcond_without ppp
 
 %bcond_without nmtui
 %bcond_without regen_docs
@@ -117,7 +118,6 @@ Requires: dbus >= %{dbus_version}
 Requires: glib2 >= %{glib2_version}
 Requires: libnl3 >= %{libnl3_version}
 Requires: %{name}-libnm%{?_isa} = %{epoch}:%{version}-%{release}
-Requires: ppp = %{ppp_version}
 Obsoletes: dhcdbd
 Obsoletes: NetworkManager < %{obsoletes_device_plugins}
 Obsoletes: NetworkManager-wimax < 1.2
@@ -141,7 +141,6 @@ BuildRequires: libnl3-devel >= %{libnl3_version}
 BuildRequires: perl(XML::Parser)
 BuildRequires: perl(YAML)
 BuildRequires: automake autoconf intltool libtool
-BuildRequires: ppp-devel >= 2.4.5
 BuildRequires: nss-devel >= 3.11.7
 BuildRequires: dhclient
 BuildRequires: readline-devel
@@ -187,6 +186,7 @@ services.
 Summary: ADSL device plugin for NetworkManager
 Group: System Environment/Base
 Requires: %{name}%{?_isa} = %{epoch}:%{version}-%{release}
+Requires: NetworkManager-ppp = %{epoch}:%{version}-%{release}
 Obsoletes: NetworkManager < %{obsoletes_device_plugins}
 Obsoletes: NetworkManager-atm
 
@@ -243,12 +243,26 @@ This package contains NetworkManager support for Wifi and OLPC devices.
 Summary: Mobile broadband device plugin for NetworkManager
 Group: System Environment/Base
 Requires: %{name}%{?_isa} = %{epoch}:%{version}-%{release}
+Requires: NetworkManager-ppp = %{epoch}:%{version}-%{release}
 Requires: ModemManager
 Obsoletes: NetworkManager < %{obsoletes_device_plugins}
 
 %description wwan
 This package contains NetworkManager support for mobile broadband (WWAN)
 devices.
+%endif
+
+%if %{with ppp}
+%package ppp
+Summary: PPP plugin for NetworkManager
+Group: System Environment/Base
+Requires: %{name}%{?_isa} = %{epoch}:%{version}-%{release}
+Requires: ppp = %{ppp_version}
+BuildRequires: ppp-devel >= 2.4.5
+Obsoletes: NetworkManager < 1.6.0
+
+%description ppp
+This package contains NetworkManager support for PPP.
 %endif
 
 
@@ -374,7 +388,6 @@ intltoolize --automake --copy --force
 	--with-more-asserts=10000 \
 %endif
 	--enable-ld-gc \
-	--enable-ppp=yes \
 	--with-libaudit=yes-disabled-by-default \
 %if 0%{?with_modem_manager_1}
 	--with-modem-manager-1=yes \
@@ -415,7 +428,10 @@ intltoolize --automake --copy --force
 	--with-valgrind=no \
 	--enable-ifcfg-rh=yes \
 	--with-system-libndp=yes \
+%if %{with ppp}
+	--enable-ppp=yes \
 	--with-pppd-plugin-dir=%{_libdir}/pppd/%{ppp_version} \
+%endif
 	--with-dist-version=%{version}-%{release} \
 	--with-setting-plugins-default='ifcfg-rh,ibft' \
 	--with-config-dns-rc-manager-default=symlink \
@@ -548,7 +564,6 @@ fi
 %dir %{_sysconfdir}/NetworkManager/system-connections
 %{_datadir}/dbus-1/system-services/org.freedesktop.NetworkManager.service
 %{_datadir}/dbus-1/system-services/org.freedesktop.nm_dispatcher.service
-%{_libdir}/pppd/%{ppp_version}/nm-pppd-plugin.so
 %{_datadir}/polkit-1/actions/*.policy
 %{_prefix}/lib/udev/rules.d/*.rules
 # systemd stuff
@@ -587,6 +602,11 @@ fi
 %files wwan
 %{_libdir}/%{name}/libnm-device-plugin-wwan.so
 %{_libdir}/%{name}/libnm-wwan.so
+%endif
+
+%if %{with ppp}
+%files ppp
+%{_libdir}/pppd/%{ppp_version}/nm-pppd-plugin.so
 %endif
 
 %files glib -f %{name}.lang
