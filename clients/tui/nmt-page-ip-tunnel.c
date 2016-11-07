@@ -22,9 +22,8 @@
 
 #include "nm-default.h"
 
-#include "nm-editor-bindings.h"
-
 #include "nmt-page-ip-tunnel.h"
+
 #include "nmt-device-entry.h"
 #include "nmt-mtu-entry.h"
 
