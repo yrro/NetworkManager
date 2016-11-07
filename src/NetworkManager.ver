@@ -501,6 +501,7 @@ global:
 	nm_settings_get_type;
 	nm_settings_plugin_get_type;
 	nm_simple_connection_new;
+	nm_supplicant_config_add_bgscan;
 	nm_supplicant_config_add_no_security;
 	nm_supplicant_config_add_setting_wireless;
 	nm_supplicant_config_add_setting_wireless_security;

@@ -30,6 +30,7 @@
 #include "nm-setting.h"
 #include "NetworkManagerUtils.h"
 #include "nm-utils.h"
+#include "nm-setting-ip4-config.h"
 
 typedef struct {
 	char *value;
@@ -459,6 +460,55 @@ nm_supplicant_config_add_setting_wireless (NMSupplicantConfig * self,
 	return TRUE;
 }
 
+gboolean
+nm_supplicant_config_add_bgscan (NMSupplicantConfig *self,
+                                 NMConnection *connection,
+                                 GError **error)
+{
+	NMSettingWireless *s_wifi;
+	NMSettingWirelessSecurity *s_wsec;
+	const char *ip4_method = NULL;
+	const char *bgscan = NULL;
+	const char *key_mgmt = NULL;
+
+	/* Don't scan when a shared connection (either AP or Ad-Hoc) is active;
+	 * it will disrupt connected clients.
+	 */
+	ip4_method = nm_utils_get_ip_config_method (connection, NM_TYPE_SETTING_IP4_CONFIG);
+	if (!strcmp (ip4_method, NM_SETTING_IP4_CONFIG_METHOD_SHARED))
+		return TRUE;
+
+	/* Don't scan when the connection is locked to a specifc AP, since
+	 * intra-ESS roaming (which requires periodic scanning) isn't being
+	 * used due to the specific AP lock. (bgo #513820)
+	 */
+	s_wifi = nm_connection_get_setting_wireless (connection);
+	g_assert (s_wifi);
+	if (nm_setting_wireless_get_bssid (s_wifi))
+		return TRUE;
+
+	/* Default to a very long bgscan interval when signal is OK on the assumption
+	 * that either (a) there aren't multiple APs and we don't need roaming, or
+	 * (b) since EAP/802.1x isn't used and thus there are fewer steps to fail
+	 * during a roam, we can wait longer before scanning for roam candidates.
+	 */
+	bgscan = "simple:30:-80:86400";
+
+	/* If using WPA Enterprise or Dynamic WEP use a shorter bgscan interval on
+	 * the assumption that this is a multi-AP ESS in which we want more reliable
+	 * roaming between APs.  Thus trigger scans when the signal is still somewhat
+	 * OK so we have an up-to-date roam candidate list when the signal gets bad.
+	 */
+	s_wsec = nm_connection_get_setting_wireless_security (connection);
+	if (s_wsec) {
+		key_mgmt = nm_setting_wireless_security_get_key_mgmt (s_wsec);
+		if (key_mgmt && (!strcmp (key_mgmt, "ieee8021x") || !strcmp (key_mgmt, "wpa-eap")))
+			bgscan = "simple:30:-65:300";
+	}
+
+	return nm_supplicant_config_add_option (self, "bgscan", bgscan, -1, FALSE, error);
+}
+
 static gboolean
 add_string_val (NMSupplicantConfig *self,
                 const char *field,
@@ -733,12 +783,6 @@ nm_supplicant_config_add_setting_wireless_security (NMSupplicantConfig *self,
 		}
 
 		if (!strcmp (key_mgmt, "wpa-eap")) {
-			/* If using WPA Enterprise, enable optimized background scanning
-			 * to ensure roaming within an ESS works well.
-			 */
-			if (!nm_supplicant_config_add_option (self, "bgscan", "simple:30:-65:300", -1, FALSE, error))
-				return FALSE;
-
 			/* When using WPA-Enterprise, we want to use Proactive Key Caching (also
 			 * called Opportunistic Key Caching) to avoid full EAP exchanges when
 			 * roaming between access points in the same mobility group.
