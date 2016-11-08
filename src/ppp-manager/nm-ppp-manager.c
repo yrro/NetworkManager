@@ -910,14 +910,13 @@ nm_ppp_manager_start (NMPPPManager *manager,
 
 	priv = NM_PPP_MANAGER_GET_PRIVATE (manager);
 
-#if !WITH_PPP
-	/* PPP support disabled */
-	g_set_error_literal (err,
-	                     NM_MANAGER_ERROR,
-	                     NM_MANAGER_ERROR_FAILED,
-	                     "PPP support is not enabled.");
-	return FALSE;
-#endif
+	if (!g_file_test (NM_PPPD_PLUGIN, G_FILE_TEST_EXISTS)) {
+		g_set_error_literal (err,
+		                     NM_MANAGER_ERROR,
+		                     NM_MANAGER_ERROR_FAILED,
+		                     "PPP plugin is not installed.");
+		return FALSE;
+	}
 
 	priv->pid = 0;
 
