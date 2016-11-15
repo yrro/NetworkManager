@@ -1266,9 +1266,8 @@ class ObjectManager(dbus.service.Object):
 ###################################################################
 IFACE_DNS_MANAGER = 'org.freedesktop.NetworkManager.DnsManager'
 
-class DnsManager(dbus.service.Object):
+class DnsManager(ExportedObj):
     def __init__(self, bus, object_path):
-        dbus.service.Object.__init__(self, bus, object_path)
         self.props = {}
         self.props['Mode'] = "dnsmasq"
         self.props['RcManager'] = "symlink"
@@ -1278,6 +1277,9 @@ class DnsManager(dbus.service.Object):
                   'priority'    : dbus.Int32(100) },
                 'sv') ],
             'a{sv}')
+
+        self.add_dbus_interface(IFACE_DNS_MANAGER, self.__get_props, None)
+        ExportedObj.__init__(self, bus, object_path)
 
     @dbus.service.method(dbus_interface=dbus.PROPERTIES_IFACE, in_signature='s', out_signature='a{sv}')
     def GetAll(self, iface):
@@ -1293,9 +1295,8 @@ class DnsManager(dbus.service.Object):
             raise UnknownPropertyException()
         return self.props[name]
 
-    @dbus.service.signal(IFACE_DNS_MANAGER, signature='a{sv}')
-    def PropertiesChanged(self, path):
-        pass
+    def __get_props(self):
+        return self.props
 
 ###################################################################
 def stdin_cb(io, condition):
