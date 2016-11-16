@@ -2716,10 +2716,18 @@ array_contains_ip6_address (const GArray *addresses, const NMPlatformIP6Address 
 	return FALSE;
 }
 
-static GHashTable *
-build_subnets_hash (const GArray *addresses, gboolean consider_flags)
+static gboolean
+_ptr_inside_ip4_addr_array (const GArray *array, gconstpointer needle)
 {
-	NMPlatformIP4Address *address;
+	return    needle >= (gconstpointer) &g_array_index (array, const NMPlatformIP4Address, 0)
+	       && needle <  (gconstpointer) &g_array_index (array, const NMPlatformIP4Address, array->len);
+}
+
+static GHashTable *
+ip4_addr_subnets_build_index (const GArray *addresses, gboolean consider_flags)
+{
+	const NMPlatformIP4Address *address;
+	gpointer p;
 	GHashTable *subnets;
 	GPtrArray *ptr;
 	guint32 net;
@@ -2736,38 +2744,50 @@ build_subnets_hash (const GArray *addresses, gboolean consider_flags)
 
 	/* Build a hash table of all addresses per subnet */
 	for (i = 0; i < addresses->len; i++) {
-		address = &g_array_index (addresses, NMPlatformIP4Address, i);
+		address = &g_array_index (addresses, const NMPlatformIP4Address, i);
 		net = address->address & nm_utils_ip4_prefix_to_netmask (address->plen);
-		ptr = g_hash_table_lookup (subnets, GUINT_TO_POINTER (net));
-		if (!ptr) {
+		if (!g_hash_table_lookup_extended (subnets, GUINT_TO_POINTER (net), NULL, &p)) {
+			g_hash_table_insert (subnets, GUINT_TO_POINTER (net), (gpointer) address);
+			continue;
+		}
+		if (_ptr_inside_ip4_addr_array (addresses, p)) {
 			ptr = g_ptr_array_new ();
 			g_hash_table_insert (subnets, GUINT_TO_POINTER (net), ptr);
-		}
+			g_ptr_array_add (ptr, p);
+		} else
+			ptr = p;
 
 		if (!consider_flags || NM_FLAGS_HAS (address->n_ifa_flags, IFA_F_SECONDARY))
 			position = -1; /* append */
 		else
 			position = 0; /* prepend */
 
-		g_ptr_array_insert (ptr, position, address);
+		g_ptr_array_insert (ptr, position, (gpointer) address);
 	}
 
 	return subnets;
 }
 
-static GPtrArray *
-get_subnet_addresses (const NMPlatformIP4Address *address, GHashTable *subnets)
+static gboolean
+ip4_addr_subnets_is_secondary (const NMPlatformIP4Address *address, GHashTable *subnets, const GArray *addresses, GPtrArray **out_addr_list)
 {
-	GPtrArray *ptr;
+	GPtrArray *addr_list;
+	gpointer p;
 	guint32 net;
 
-	g_return_val_if_fail (subnets, NULL);
-
 	net = address->address & nm_utils_ip4_prefix_to_netmask (address->plen);
-	ptr = g_hash_table_lookup (subnets, GUINT_TO_POINTER (net));
-	g_return_val_if_fail (ptr, NULL);
-
-	return ptr;
+	p = g_hash_table_lookup (subnets, GUINT_TO_POINTER (net));
+	nm_assert (p);
+	if (!_ptr_inside_ip4_addr_array (addresses, p)) {
+		addr_list = p;
+		if (addr_list->pdata[0] != address) {
+			*out_addr_list = addr_list;
+			return TRUE;
+		}
+	} else
+		nm_assert ((gconstpointer) address == p);
+	*out_addr_list = NULL;
+	return FALSE;
 }
 
 /**
@@ -2801,8 +2821,8 @@ nm_platform_ip4_address_sync (NMPlatform *self, int ifindex, const GArray *known
 	_CHECK_SELF (self, klass, FALSE);
 
 	addresses = nm_platform_ip4_address_get_all (self, ifindex);
-	plat_subnets = build_subnets_hash (addresses, TRUE);
-	known_subnets = build_subnets_hash (known_addresses, FALSE);
+	plat_subnets = ip4_addr_subnets_build_index (addresses, TRUE);
+	known_subnets = ip4_addr_subnets_build_index (known_addresses, FALSE);
 
 	/* Delete unknown addresses */
 	for (i = 0; i < addresses->len; i++) {
@@ -2817,9 +2837,7 @@ nm_platform_ip4_address_sync (NMPlatform *self, int ifindex, const GArray *known
 		if (known_address) {
 			gboolean secondary;
 
-			ptr = get_subnet_addresses (known_address, known_subnets);
-			secondary = ptr->pdata[0] != known_address;
-
+			secondary = ip4_addr_subnets_is_secondary (known_address, known_subnets, known_addresses, NULL);
 			/* Ignore the matching address if it has a different primary/slave
 			 * role. */
 			if (secondary != NM_FLAGS_HAS (address->n_ifa_flags, IFA_F_SECONDARY))
@@ -2831,9 +2849,8 @@ nm_platform_ip4_address_sync (NMPlatform *self, int ifindex, const GArray *known
 			                                address->address,
 			                                address->plen,
 			                                address->peer_address);
-
-			ptr = get_subnet_addresses (address, plat_subnets);
-			if (address == ptr->pdata[0]) {
+			if (   !ip4_addr_subnets_is_secondary (address, plat_subnets, addresses, &ptr)
+			    && ptr) {
 				/* If we just deleted a primary addresses and there were
 				 * secondary ones the kernel can do two things, depending on
 				 * version and sysctl setting: delete also secondary addresses
