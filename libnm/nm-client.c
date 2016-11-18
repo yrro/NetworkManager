@@ -1728,15 +1728,23 @@ nm_client_reload_connections_finish (NMClient *client,
  *
  * Gets the current DNS processing mode.
  *
- * Return value: the DNS processing mode
+ * Return value: the DNS processing mode, or %NULL in case the
+ *   value is not available.
  *
  * Since: 1.6
  **/
-const char *nm_client_get_dns_mode (NMClient *client)
+const char *
+nm_client_get_dns_mode (NMClient *client)
 {
-	g_return_val_if_fail (NM_IS_CLIENT (client), NULL);
+	NMClientPrivate *priv;
 
-	return nm_dns_manager_get_mode (NM_CLIENT_GET_PRIVATE (client)->dns_manager);
+	g_return_val_if_fail (NM_IS_CLIENT (client), NULL);
+	priv = NM_CLIENT_GET_PRIVATE (client);
+
+	if (priv->dns_manager)
+		return nm_dns_manager_get_mode (priv->dns_manager);
+	else
+		return NULL;
 }
 
 /**
@@ -1745,15 +1753,23 @@ const char *nm_client_get_dns_mode (NMClient *client)
  *
  * Gets the current DNS resolv.conf manager.
  *
- * Return value: the resolv.conf manager
+ * Return value: the resolv.conf manager or %NULL in case the
+ *   value is not available.
  *
  * Since: 1.6
  **/
-const char *nm_client_get_dns_rc_manager (NMClient *client)
+const char *
+nm_client_get_dns_rc_manager (NMClient *client)
 {
-	g_return_val_if_fail (NM_IS_CLIENT (client), NULL);
+	NMClientPrivate *priv;
 
-	return nm_dns_manager_get_rc_manager (NM_CLIENT_GET_PRIVATE (client)->dns_manager);
+	g_return_val_if_fail (NM_IS_CLIENT (client), NULL);
+	priv = NM_CLIENT_GET_PRIVATE (client);
+
+	if (priv->dns_manager)
+		return nm_dns_manager_get_rc_manager (priv->dns_manager);
+	else
+		return NULL;
 }
 
 /**
@@ -1763,15 +1779,24 @@ const char *nm_client_get_dns_rc_manager (NMClient *client)
  * Gets the current DNS configuration
  *
  * Returns: (transfer none) (element-type NMDnsEntry): a #GPtrArray
- * containing #NMDnsEntry elements.  The returned array is owned by the
- * #NMClient object and should not be modified.
+ * containing #NMDnsEntry elements or %NULL in case the value is not
+ * available.  The returned array is owned by the #NMClient object
+ * and should not be modified.
  *
  * Since: 1.6
  **/
 const GPtrArray *
 nm_client_get_dns_configuration (NMClient *client)
 {
-	return nm_dns_manager_get_configuration (NM_CLIENT_GET_PRIVATE (client)->dns_manager);
+	NMClientPrivate *priv;
+
+	g_return_val_if_fail (NM_IS_CLIENT (client), NULL);
+	priv = NM_CLIENT_GET_PRIVATE (client);
+
+	if (priv->dns_manager)
+		return nm_dns_manager_get_configuration (priv->dns_manager);
+	else
+		return NULL;
 }
 
 /*****************************************************************************/
@@ -2201,27 +2226,21 @@ objects_created (NMClient *client, GDBusObjectManager *object_manager, GError **
 	                  G_CALLBACK (settings_connection_removed), client);
 
 	dns_manager = g_dbus_object_manager_get_object (object_manager, NM_DBUS_PATH_DNS_MANAGER);
-	if (!dns_manager) {
-		g_set_error_literal (error,
-		                     NM_CLIENT_ERROR,
-		                     NM_CLIENT_ERROR_MANAGER_NOT_RUNNING,
-		                     "DNS manager object not found");
-		return FALSE;
+	if (dns_manager) {
+		obj_nm = g_object_get_qdata (G_OBJECT (dns_manager), _nm_object_obj_nm_quark ());
+		if (!obj_nm) {
+			g_set_error_literal (error,
+			                     NM_CLIENT_ERROR,
+			                     NM_CLIENT_ERROR_MANAGER_NOT_RUNNING,
+			                     "DNS manager object lacks the proper interface");
+			return FALSE;
+		}
+		priv->dns_manager = NM_DNS_MANAGER (g_object_ref (obj_nm));
+
+		g_signal_connect (priv->dns_manager, "notify",
+		                  G_CALLBACK (dns_notify), client);
 	}
 
-	obj_nm = g_object_get_qdata (G_OBJECT (dns_manager), _nm_object_obj_nm_quark ());
-	if (!obj_nm) {
-		g_set_error_literal (error,
-		                     NM_CLIENT_ERROR,
-		                     NM_CLIENT_ERROR_MANAGER_NOT_RUNNING,
-		                     "DNS manager object lacks the proper interface");
-		return FALSE;
-	}
-
-	priv->dns_manager = NM_DNS_MANAGER (g_object_ref (obj_nm));
-
-	g_signal_connect (priv->dns_manager, "notify",
-	                  G_CALLBACK (dns_notify), client);
 
 	/* The handlers don't really use the client instance. However
 	 * it makes it convenient to unhook them by data. */
@@ -2664,10 +2683,20 @@ get_property (GObject *object, guint prop_id,
 	/* DNS properties */
 	case PROP_DNS_MODE:
 	case PROP_DNS_RC_MANAGER:
-	case PROP_DNS_CONFIGURATION:
 		g_return_if_fail (pspec->name && strlen (pspec->name) > NM_STRLEN ("dns-"));
-		g_object_get_property (G_OBJECT (NM_CLIENT_GET_PRIVATE (object)->dns_manager),
-		                       &pspec->name[NM_STRLEN ("dns-")], value);
+		if (priv->dns_manager)
+			g_object_get_property (G_OBJECT (priv->dns_manager),
+			                       &pspec->name[NM_STRLEN ("dns-")], value);
+		else
+			g_value_set_string (value, NULL);
+		break;
+	case PROP_DNS_CONFIGURATION:
+		if (priv->dns_manager) {
+			g_object_get_property (G_OBJECT (priv->dns_manager),
+			                       NM_DNS_MANAGER_CONFIGURATION,
+			                       value);
+		} else
+			g_value_take_boxed (value, NULL);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
