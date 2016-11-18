@@ -1247,7 +1247,7 @@ do_overview (NmCli *nmc, int argc, char **argv)
 	g_free (devices);
 
 	p = nm_client_get_dns_configuration (nmc->client);
-	for (i = 0; i < p->len; i++) {
+	for (i = 0; p && i < p->len; i++) {
 		const char * const *strv;
 
 		dns = p->pdata[i];
