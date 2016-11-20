@@ -103,7 +103,6 @@ struct _NMPPPManagerClass {
 };
 
 GType nm_ppp_manager_get_type (void);
-gboolean nm_plugin_init (GError **error);
 
 G_DEFINE_TYPE (NMPPPManager, nm_ppp_manager, NM_TYPE_EXPORTED_OBJECT)
 
