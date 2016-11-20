@@ -258,6 +258,7 @@ Group: System Environment/Base
 Requires: %{name}%{?_isa} = %{epoch}:%{version}-%{release}
 Requires: ppp = %{ppp_version}
 BuildRequires: ppp-devel >= 2.4.5
+Provides: NetworkManager = %{epoch}:%{version}-%{release}
 Obsoletes: NetworkManager < %{obsoletes_ppp_plugin}
 
 %description ppp
