@@ -5595,8 +5595,7 @@ nm_manager_set_capability (NMManager *self,
 NMPPPManager *
 nm_manager_ppp_create (NMManager *self, const char *iface, GError **error)
 {
-	NMManager *manager = NM_MANAGER (self);
-	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (manager);
+	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (self);
 	NMPPPManager *ret;
 	GModule *plugin;
 	GError *error_local = NULL;
@@ -5670,8 +5669,7 @@ nm_manager_ppp_start (NMManager *self,
                       guint baud_override,
                       GError **err)
 {
-	NMManager *manager = NM_MANAGER (self);
-	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (manager);
+	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (self);
 
 	g_return_val_if_fail (priv->ppp_ops, FALSE);
 
@@ -5685,8 +5683,7 @@ nm_manager_ppp_stop_async (NMManager *self,
                            GAsyncReadyCallback callback,
                            gpointer user_data)
 {
-	NMManager *manager = NM_MANAGER (self);
-	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (manager);
+	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (self);
 
 	g_return_if_fail (priv->ppp_ops);
 
@@ -5699,8 +5696,7 @@ nm_manager_ppp_stop_finish (NMManager *self,
                             GAsyncResult *res,
                             GError **error)
 {
-	NMManager *manager = NM_MANAGER (self);
-	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (manager);
+	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (self);
 
 	g_return_val_if_fail (priv->ppp_ops, FALSE);
 
@@ -5710,8 +5706,7 @@ nm_manager_ppp_stop_finish (NMManager *self,
 void
 nm_manager_ppp_stop_sync (NMManager *self, NMPPPManager *ppp_manager)
 {
-	NMManager *manager = NM_MANAGER (self);
-	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (manager);
+	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (self);
 
 	g_return_if_fail (priv->ppp_ops);
 
