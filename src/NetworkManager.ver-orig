@@ -144,6 +144,7 @@ global:
 	nm_inotify_helper_remove_watch;
 	nm_ip4_config_add_address;
 	nm_ip4_config_add_nameserver;
+	nm_ip4_config_add_route;
 	nm_ip4_config_add_wins;
 	nm_ip4_config_get_address;
 	nm_ip4_config_get_nameserver;
