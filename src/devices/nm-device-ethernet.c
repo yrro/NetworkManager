@@ -48,6 +48,8 @@
 #include "nm-settings.h"
 #include "nm-device-factory.h"
 #include "nm-core-internal.h"
+#include "ppp-manager/nm-ppp-status.h"
+#include "ppp-manager/nm-ppp-manager-call.h"
 #include "NetworkManagerUtils.h"
 
 #include "nmdbus-device-ethernet.h"
@@ -931,11 +933,10 @@ pppoe_stage3_ip4_config_start (NMDeviceEthernet *self, NMDeviceStateReason *reas
 	s_pppoe = (NMSettingPppoe *) nm_device_get_applied_setting ((NMDevice *) self, NM_TYPE_SETTING_PPPOE);
 	g_assert (s_pppoe);
 
-	priv->ppp_manager = nm_manager_ppp_create (nm_manager_get (),
-	                                           nm_device_get_iface (NM_DEVICE (self)),
+	priv->ppp_manager = nm_ppp_manager_create (nm_device_get_iface (NM_DEVICE (self)),
 	                                           &err);
 	if (   priv->ppp_manager
-	    && nm_manager_ppp_start (nm_manager_get(), priv->ppp_manager, req,
+	    && nm_ppp_manager_start (priv->ppp_manager, req,
 	                             nm_setting_pppoe_get_username (s_pppoe),
 	                             30, 0, &err)) {
 		g_signal_connect (priv->ppp_manager, NM_PPP_MANAGER_STATE_CHANGED,
@@ -1315,7 +1316,7 @@ deactivate (NMDevice *device)
 	}
 
 	if (priv->ppp_manager) {
-		nm_manager_ppp_stop_sync (nm_manager_get (), priv->ppp_manager);
+		nm_ppp_manager_stop_sync (priv->ppp_manager);
 		g_clear_object (&priv->ppp_manager);
 	}
 

@@ -16,15 +16,28 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  *
  * Copyright (C) 2008 Novell, Inc.
- * Copyright (C) 2008 - 2016 Red Hat, Inc.
+ * Copyright (C) 2008-2016 Red Hat, Inc.
  */
 
-#ifndef __NM_PPP_MANAGER_H__
-#define __NM_PPP_MANAGER_H__
+#ifndef __NM_PPP_STATUS_H__
+#define __NM_PPP_STATUS_H__
 
-#define NM_PPP_MANAGER_PARENT_IFACE "parent-iface"
-#define NM_PPP_MANAGER_STATE_CHANGED "state-changed"
+typedef enum {
+	NM_PPP_STATUS_UNKNOWN,
 
-typedef struct _NMPPPManager NMPPPManager;
+	NM_PPP_STATUS_DEAD,
+	NM_PPP_STATUS_INITIALIZE,
+	NM_PPP_STATUS_SERIALCONN,
+	NM_PPP_STATUS_DORMANT,
+	NM_PPP_STATUS_ESTABLISH,
+	NM_PPP_STATUS_AUTHENTICATE,
+	NM_PPP_STATUS_CALLBACK,
+	NM_PPP_STATUS_NETWORK,
+	NM_PPP_STATUS_RUNNING,
+	NM_PPP_STATUS_TERMINATE,
+	NM_PPP_STATUS_DISCONNECT,
+	NM_PPP_STATUS_HOLDOFF,
+	NM_PPP_STATUS_MASTER
+} NMPPPStatus;
 
-#endif /* __NM_PPP_MANAGER_H__ */
+#endif /* __NM_PPP_STATUS_H__ */

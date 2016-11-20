@@ -59,8 +59,6 @@
 #include "nmdbus-manager.h"
 #include "nmdbus-device.h"
 
-#define PPP_PLUGIN_PATH NMPLUGINDIR "/libnm-ppp-plugin.so"
-
 static gboolean add_device (NMManager *self, NMDevice *device, GError **error);
 
 static NMActiveConnection *_new_active_connection (NMManager *self,
@@ -151,7 +149,6 @@ typedef struct {
 
 	gboolean startup;
 	gboolean devices_inited;
-	NMPPPOps *ppp_ops;
 } NMManagerPrivate;
 
 struct _NMManager {
@@ -5588,129 +5585,6 @@ nm_manager_set_capability (NMManager *self,
 
 	g_array_insert_val (priv->capabilities, ~idx, cap_i);
 	_notify (self, PROP_CAPABILITIES);
-}
-
-/*****************************************************************************/
-
-NMPPPManager *
-nm_manager_ppp_create (NMManager *self, const char *iface, GError **error)
-{
-	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (self);
-	NMPPPManager *ret;
-	GModule *plugin;
-	GError *error_local = NULL;
-	NMPPPOps *ops;
-	struct stat st;
-	int errsv;
-
-	if (!priv->ppp_ops) {
-		if (stat (PPP_PLUGIN_PATH, &st) != 0) {
-			errsv = errno;
-			g_set_error_literal (error,
-			                     NM_MANAGER_ERROR, NM_MANAGER_ERROR_MISSING_PLUGIN,
-			                     "the PPP plugin " PPP_PLUGIN_PATH " is not installed");
-			return NULL;
-		}
-
-		if (!nm_utils_validate_plugin (PPP_PLUGIN_PATH, &st, &error_local)) {
-			g_set_error (error, NM_MANAGER_ERROR, NM_MANAGER_ERROR_MISSING_PLUGIN,
-			             "could not load the PPP plugin " PPP_PLUGIN_PATH ": %s",
-			             error_local->message);
-			g_clear_error (&error_local);
-			return NULL;
-		}
-
-		plugin = g_module_open (PPP_PLUGIN_PATH, G_MODULE_BIND_LOCAL);
-		if (!plugin) {
-			g_set_error (error, NM_MANAGER_ERROR, NM_MANAGER_ERROR_MISSING_PLUGIN,
-			             "could not load the PPP plugin " PPP_PLUGIN_PATH ": %s",
-			             g_module_error ());
-			return NULL;
-		}
-
-		if (!g_module_symbol (plugin, "ppp_ops", (gpointer) &ops)) {
-			g_set_error (error, NM_MANAGER_ERROR, NM_MANAGER_ERROR_MISSING_PLUGIN,
-			             "error loading the PPP plugin: %s", g_module_error ());
-			return NULL;
-		}
-
-		/* after loading glib types from the plugin, we cannot unload the library anymore.
-		 * Make it resident. */
-		g_module_make_resident (plugin);
-
-		nm_assert (ops);
-		nm_assert (ops->create);
-		nm_assert (ops->start);
-		nm_assert (ops->stop_async);
-		nm_assert (ops->stop_finish);
-		nm_assert (ops->stop_sync);
-
-		priv->ppp_ops = ops;
-	}
-
-	_LOGI (LOGD_CORE | LOGD_PPP, "loaded PPP plugin " PPP_PLUGIN_PATH);
-
-	ret = priv->ppp_ops->create (iface);
-	if (!ret) {
-		g_set_error_literal (error, NM_MANAGER_ERROR, NM_MANAGER_ERROR_FAILED,
-		                     "the PPP plugin failed to create a PPP instance");
-		return NULL;
-	}
-
-	return ret;
-}
-
-gboolean
-nm_manager_ppp_start (NMManager *self,
-                      NMPPPManager *ppp_manager,
-                      NMActRequest *req,
-                      const char *ppp_name,
-                      guint32 timeout_secs,
-                      guint baud_override,
-                      GError **err)
-{
-	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (self);
-
-	g_return_val_if_fail (priv->ppp_ops, FALSE);
-
-	return priv->ppp_ops->start (ppp_manager, req, ppp_name, timeout_secs, baud_override, err);
-}
-
-void
-nm_manager_ppp_stop_async (NMManager *self,
-                           NMPPPManager *ppp_manager,
-                           GCancellable *cancellable,
-                           GAsyncReadyCallback callback,
-                           gpointer user_data)
-{
-	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (self);
-
-	g_return_if_fail (priv->ppp_ops);
-
-	priv->ppp_ops->stop_async (ppp_manager, cancellable, callback, user_data);
-}
-
-gboolean
-nm_manager_ppp_stop_finish (NMManager *self,
-                            NMPPPManager *ppp_manager,
-                            GAsyncResult *res,
-                            GError **error)
-{
-	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (self);
-
-	g_return_val_if_fail (priv->ppp_ops, FALSE);
-
-	return priv->ppp_ops->stop_finish (ppp_manager, res, error);
-}
-
-void
-nm_manager_ppp_stop_sync (NMManager *self, NMPPPManager *ppp_manager)
-{
-	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (self);
-
-	g_return_if_fail (priv->ppp_ops);
-
-	priv->ppp_ops->stop_sync (ppp_manager);
 }
 
 /*****************************************************************************/

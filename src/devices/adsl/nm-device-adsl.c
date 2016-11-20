@@ -37,6 +37,8 @@
 #include "nm-manager.h"
 #include "nm-setting-adsl.h"
 #include "nm-utils.h"
+#include "ppp-manager/nm-ppp-status.h"
+#include "ppp-manager/nm-ppp-manager-call.h"
 
 #include "nmdbus-device-adsl.h"
 
@@ -476,9 +478,9 @@ act_stage3_ip4_config_start (NMDevice *device,
 		_LOGD (LOGD_ADSL, "starting PPPoA");
 	}
 
-	priv->ppp_manager = nm_manager_ppp_create (nm_manager_get (), ppp_iface, &err);
+	priv->ppp_manager = nm_ppp_manager_create (ppp_iface, &err);
 	if (   priv->ppp_manager
-	    && nm_manager_ppp_start (nm_manager_get (), priv->ppp_manager, req,
+	    && nm_ppp_manager_start (priv->ppp_manager, req,
 	                             nm_setting_adsl_get_username (s_adsl),
 	                             30, 0, &err)) {
 		g_signal_connect (priv->ppp_manager, NM_PPP_MANAGER_STATE_CHANGED,
@@ -508,7 +510,7 @@ adsl_cleanup (NMDeviceAdsl *self)
 	if (priv->ppp_manager) {
 		g_signal_handlers_disconnect_by_func (priv->ppp_manager, G_CALLBACK (ppp_state_changed), self);
 		g_signal_handlers_disconnect_by_func (priv->ppp_manager, G_CALLBACK (ppp_ip4_config), self);
-		nm_manager_ppp_stop_sync (nm_manager_get (), priv->ppp_manager);
+		nm_ppp_manager_stop_sync (priv->ppp_manager);
 		g_clear_object (&priv->ppp_manager);
 	}
 

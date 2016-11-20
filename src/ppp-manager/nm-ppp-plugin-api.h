@@ -15,17 +15,11 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Copyright (C) 2008 Novell, Inc.
- * Copyright (C) 2008-2016 Red Hat, Inc.
+ * Copyright (C) 2016 Red Hat, Inc.
  */
 
-#ifndef __NETWORKMANAGER_PPP_PLUGIN_H__
-#define __NETWORKMANAGER_PPP_PLUGIN_H__
-
-typedef struct _NMPPPManager NMPPPManager;
-
-#define NM_PPP_MANAGER_PARENT_IFACE "parent-iface"
-#define NM_PPP_MANAGER_STATE_CHANGED "state-changed"
+#ifndef __NM_PPP_PLUGIN_API_H__
+#define __NM_PPP_PLUGIN_API_H__
 
 typedef const struct {
 	NMPPPManager *(*create) (const char *iface);
@@ -49,22 +43,4 @@ typedef const struct {
 	void          (*stop_sync) (NMPPPManager *manager);
 } NMPPPOps;
 
-typedef enum {
-	NM_PPP_STATUS_UNKNOWN,
-
-	NM_PPP_STATUS_DEAD,
-	NM_PPP_STATUS_INITIALIZE,
-	NM_PPP_STATUS_SERIALCONN,
-	NM_PPP_STATUS_DORMANT,
-	NM_PPP_STATUS_ESTABLISH,
-	NM_PPP_STATUS_AUTHENTICATE,
-	NM_PPP_STATUS_CALLBACK,
-	NM_PPP_STATUS_NETWORK,
-	NM_PPP_STATUS_RUNNING,
-	NM_PPP_STATUS_TERMINATE,
-	NM_PPP_STATUS_DISCONNECT,
-	NM_PPP_STATUS_HOLDOFF,
-	NM_PPP_STATUS_MASTER
-} NMPPPStatus;
-
-#endif /* __NETWORKMANAGER_PPP_MANAGER_API_H__ */
+#endif /* __NM_PPP_PLUGIN_API_H__ */

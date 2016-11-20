@@ -898,7 +898,6 @@ src_cppflags = \
 	-I$(top_srcdir)/src/dnsmasq-manager \
 	-I$(top_srcdir)/src/platform \
 	-I$(top_srcdir)/src/platform/wifi \
-	-I$(top_srcdir)/src/ppp-manager \
 	-I$(top_srcdir)/src/ndisc \
 	-I$(top_srcdir)/src/settings \
 	-I$(top_srcdir)/src/supplicant-manager \
@@ -1254,6 +1253,12 @@ src_libNetworkManager_la_SOURCES = \
 	src/dnsmasq-manager/nm-dnsmasq-utils.c \
 	src/dnsmasq-manager/nm-dnsmasq-utils.h \
 	\
+	src/ppp-manager/nm-ppp-manager-call.c \
+	src/ppp-manager/nm-ppp-manager-call.h \
+	src/ppp-manager/nm-ppp-manager.h \
+	src/ppp-manager/nm-ppp-plugin-api.h \
+	src/ppp-manager/nm-ppp-status.h \
+	\
 	src/settings/nm-agent-manager.c \
 	src/settings/nm-agent-manager.h \
 	src/settings/nm-inotify-helper.c \
@@ -1514,7 +1519,7 @@ src_ppp_manager_nm_pppd_plugin_la_CPPFLAGS = \
 src_ppp_manager_nm_pppd_plugin_la_SOURCES = \
 	src/ppp-manager/nm-pppd-plugin.c \
 	src/ppp-manager/nm-pppd-plugin.h \
-	src/ppp-manager/nm-ppp-plugin.h
+	src/ppp-manager/nm-ppp-status.h
 
 src_ppp_manager_nm_pppd_plugin_la_LDFLAGS = \
 	-module -avoid-version
@@ -1524,9 +1529,11 @@ src_ppp_manager_nm_pppd_plugin_la_LIBADD = \
 	$(DL_LIBS)
 
 src_ppp_manager_libnm_ppp_plugin_la_SOURCES = \
+	src/ppp-manager/nm-pppd-plugin.h \
 	src/ppp-manager/nm-ppp-manager.c \
 	src/ppp-manager/nm-ppp-manager.h \
-	src/ppp-manager/nm-ppp-plugin.h
+	src/ppp-manager/nm-ppp-plugin-api.h \
+	src/ppp-manager/nm-ppp-status.h
 
 EXTRA_src_ppp_manager_nm_ppp_plugin_la_DEPENDENCIES = \
 	src/ppp-manager/nm-ppp-plugin.ver

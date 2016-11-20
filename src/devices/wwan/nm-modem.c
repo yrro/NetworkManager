@@ -38,6 +38,8 @@
 #include "nm-act-request.h"
 #include "nm-ip4-config.h"
 #include "nm-ip6-config.h"
+#include "ppp-manager/nm-ppp-status.h"
+#include "ppp-manager/nm-ppp-manager-call.h"
 
 /*****************************************************************************/
 
@@ -559,9 +561,9 @@ ppp_stage3_ip_config_start (NMModem *self,
 	if (port_speed_is_zero (priv->data_port))
 		baud_override = 57600;
 
-	priv->ppp_manager = nm_manager_ppp_create (nm_manager_get (), priv->data_port, &error);
+	priv->ppp_manager = nm_ppp_manager_create (priv->data_port, &error);
 	if (   priv->ppp_manager
-	    && nm_manager_ppp_start (nm_manager_get (), priv->ppp_manager, req, ppp_name,
+	    && nm_ppp_manager_start (priv->ppp_manager, req, ppp_name,
 	                             ip_timeout, baud_override, &error)) {
 		g_signal_connect (priv->ppp_manager, NM_PPP_MANAGER_STATE_CHANGED,
 		                  G_CALLBACK (ppp_state_changed),
@@ -1095,7 +1097,7 @@ ppp_manager_stop_ready (NMPPPManager *ppp_manager,
 {
 	GError *error = NULL;
 
-	if (!nm_manager_ppp_stop_finish (nm_manager_get (), ppp_manager, res, &error)) {
+	if (!nm_ppp_manager_stop_finish (ppp_manager, res, &error)) {
 		nm_log_warn (LOGD_MB, "(%s): cannot stop PPP manager: %s",
 		             nm_modem_get_uid (ctx->self),
 		             error->message);
@@ -1139,8 +1141,7 @@ deactivate_step (DeactivateContext *ctx)
 	case DEACTIVATE_CONTEXT_STEP_PPP_MANAGER_STOP:
 		/* If we have a PPP manager, stop it */
 		if (ctx->ppp_manager) {
-			nm_manager_ppp_stop_async (nm_manager_get (),
-			                           ctx->ppp_manager,
+			nm_ppp_manager_stop_async (ctx->ppp_manager,
 			                           ctx->cancellable,
 			                           (GAsyncReadyCallback) ppp_manager_stop_ready,
 			                           ctx);
