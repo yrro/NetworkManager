@@ -5639,16 +5639,13 @@ nm_manager_ppp_create (NMManager *self, const char *iface, GError **error)
 		 * Make it resident. */
 		g_module_make_resident (plugin);
 
-		if (   !ops
-		    || !ops->create
-		    || !ops->start
-		    || !ops->stop_async
-		    || !ops->stop_finish
-		    || !ops->stop_sync) {
-			g_set_error_literal (error, NM_MANAGER_ERROR, NM_MANAGER_ERROR_MISSING_PLUGIN,
-			                     "error loading the PPP plugin: missing ops");
-			return NULL;
-		}
+		nm_assert (ops);
+		nm_assert (ops->create);
+		nm_assert (ops->start);
+		nm_assert (ops->stop_async);
+		nm_assert (ops->stop_finish);
+		nm_assert (ops->stop_sync);
+
 		priv->ppp_ops = ops;
 	}
 
