@@ -27,7 +27,7 @@ typedef struct _NMPPPManager NMPPPManager;
 #define NM_PPP_MANAGER_PARENT_IFACE "parent-iface"
 #define NM_PPP_MANAGER_STATE_CHANGED "state-changed"
 
-typedef struct {
+typedef const struct {
 	NMPPPManager *(*create) (const char *iface);
 
 	gboolean      (*start) (NMPPPManager *manager,
