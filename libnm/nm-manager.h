@@ -171,6 +171,7 @@ void     nm_manager_deactivate_connection_async  (NMManager *manager,
 gboolean nm_manager_deactivate_connection_finish (NMManager *manager,
                                                   GAsyncResult *result,
                                                   GError **error);
+
 G_END_DECLS
 
 #endif /* __NM_MANAGER_H__ */

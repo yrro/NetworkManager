@@ -642,7 +642,6 @@ nm_manager_check_connectivity_finish (NMManager *manager,
 	return (NMConnectivityState) g_simple_async_result_get_op_res_gssize (simple);
 }
 
-
 /*****************************************************************************/
 /* Devices                                                      */
 /*****************************************************************************/
