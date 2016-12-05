@@ -200,7 +200,7 @@ nm_dns_entry_get_nameservers (NMDnsEntry *entry)
 }
 
 /**
- * nm_dns_entry_get_:
+ * nm_dns_entry_get_domains:
  * @entry: the #NMDnsEntry
  *
  * Gets the list of DNS domains.

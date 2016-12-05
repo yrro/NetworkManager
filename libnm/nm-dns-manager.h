@@ -62,4 +62,11 @@ const char *nm_dns_manager_get_mode   (NMDnsManager *manager);
 const char *nm_dns_manager_get_rc_manager (NMDnsManager *manager);
 const GPtrArray *nm_dns_manager_get_configuration (NMDnsManager *manager);
 
+NMDnsEntry *       nm_dns_entry_new (const char *interface,
+                                     const char * const *nameservers,
+                                     const char * const *domains,
+                                     int priority,
+                                     gboolean vpn);
+NMDnsEntry *        nm_dns_entry_dup (NMDnsEntry *entry);
+
 #endif /* __NM_DNS_MANAGER_H__ */

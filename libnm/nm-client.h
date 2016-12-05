@@ -178,12 +178,6 @@ typedef struct NMDnsEntry NMDnsEntry;
 
 NM_AVAILABLE_IN_1_6
 GType              nm_dns_entry_get_type (void);
-NMDnsEntry *       nm_dns_entry_new (const char *interface,
-                                     const char * const *nameservers,
-                                     const char * const *domains,
-                                     int priority,
-                                     gboolean vpn);
-NMDnsEntry *        nm_dns_entry_dup (NMDnsEntry *entry);
 NM_AVAILABLE_IN_1_6
 void                nm_dns_entry_unref (NMDnsEntry *entry);
 NM_AVAILABLE_IN_1_6
