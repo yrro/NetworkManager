@@ -876,6 +876,7 @@ nm_device_macsec_class_init (NMDeviceMacsecClass *klass)
 	parent_class->is_available = is_available;
 	parent_class->parent_changed_notify = parent_changed_notify;
 	parent_class->state_changed = device_state_changed;
+	parent_class->get_configured_mtu = nm_device_get_configured_mtu_for_wired;
 
 	parent_class->connection_type = NM_SETTING_MACSEC_SETTING_NAME;
 
