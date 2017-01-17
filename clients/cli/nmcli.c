@@ -186,6 +186,7 @@ usage (void)
 	              "  -m[ode] tabular|multiline                  output mode\n"
 	              "  -c[olors] auto|yes|no                      whether to use colors in output\n"
 	              "  -f[ields] <field1,field2,...>|all|common   specify fields to output\n"
+	              "  -g[et-vars] <field1,field2,...>|all|common shortcut for -t -f <args>\n"
 	              "  -e[scape] yes|no                           escape columns separators in values\n"
 	              "  -a[sk]                                     ask for missing parameters\n"
 	              "  -s[how-secrets]                            allow displaying passwords\n"
@@ -241,7 +242,7 @@ process_command_line (NmCli *nmc, int argc, char **argv)
 		if (argc == 1 && nmc->complete) {
 			nmc_complete_strings (opt, "--terse", "--pretty", "--mode", "--colors", "--escape",
 			                           "--fields", "--nocheck", "--ask", "--show-secrets",
-			                           "--wait", "--version", "--help", NULL);
+			                           "--get-vars", "--wait", "--version", "--help", NULL);
 		}
 
 		if (opt[1] == '-') {
@@ -345,6 +346,17 @@ process_command_line (NmCli *nmc, int argc, char **argv)
 			if (argc == 1 && nmc->complete)
 				complete_fields (argv[0]);
 			nmc->required_fields = g_strdup (argv[0]);
+		} else if (matches (opt, "-get-vars") == 0) {
+			if (next_arg (&argc, &argv) != 0) {
+				g_string_printf (nmc->return_text, _("Error: fields for '%s' options are missing."), opt);
+				nmc->return_value = NMC_RESULT_ERROR_USER_INPUT;
+				return FALSE;
+			}
+			if (argc == 1 && nmc->complete)
+				complete_fields (argv[0]);
+			nmc->required_fields = g_strdup (argv[0]);
+			nmc->print_output = NMC_PRINT_TERSE;
+			nmc->mode_specified = TRUE;
 		} else if (matches (opt, "-nocheck") == 0) {
 			/* ignore for backward compatibility */
 		} else if (matches (opt, "-ask") == 0) {
