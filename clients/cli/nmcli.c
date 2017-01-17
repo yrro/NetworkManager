@@ -264,8 +264,11 @@ process_command_line (NmCli *nmc, int argc, char **argv)
 				nmc->return_value = NMC_RESULT_ERROR_USER_INPUT;
 				return FALSE;
 			}
-			else
+			else {
 				nmc->print_output = NMC_PRINT_TERSE;
+				/* terse output implies fixed (default) tabular mode (but explicit -m option overrides) */
+				nmc->mode_specified = TRUE;
+			}
 		} else if (matches (opt, "-pretty") == 0) {
 			if (nmc->print_output == NMC_PRINT_PRETTY) {
 				g_string_printf (nmc->return_text, _("Error: Option '--pretty' is specified the second time."));
