@@ -772,6 +772,45 @@ nm_modem_stage3_ip6_config_start (NMModem *self,
 	return ret;
 }
 
+guint32
+nm_modem_get_configured_mtu (NMDevice *self, gboolean *out_is_user_config)
+{
+	NMConnection *connection;
+	NMSetting *setting;
+	gint64 mtu_default;
+	guint32 mtu = 0;
+	gs_free char *default_prop = NULL;
+
+	nm_assert (NM_IS_DEVICE (self));
+	nm_assert (out_is_user_config);
+
+	connection = nm_device_get_applied_connection (self);
+	if (!connection)
+		g_return_val_if_reached (0);
+
+	setting = (NMSetting *) nm_connection_get_setting_gsm (connection);
+	if (!setting)
+		setting = (NMSetting *) nm_connection_get_setting_cdma (connection);
+
+	if (setting) {
+		g_object_get (setting, "mtu", &mtu, NULL);
+		if (mtu) {
+			*out_is_user_config = TRUE;
+			return mtu;
+		}
+
+		default_prop = g_strdup_printf ("%s.mtu", nm_setting_get_name (setting));
+		mtu_default = nm_device_get_configured_mtu_from_connection_default (self, default_prop);
+		if (mtu_default >= 0) {
+			*out_is_user_config = TRUE;
+			return (guint32) mtu_default;
+		}
+	}
+
+	*out_is_user_config = FALSE;
+	return 0;
+}
+
 /*****************************************************************************/
 
 static void
