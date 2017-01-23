@@ -1055,6 +1055,9 @@ print_required_fields (NmCli *nmc, const NmcOutputField field_values[])
 	gboolean section_prefix = field_values[0].flags & NMC_OF_FLAG_SECTION_PREFIX;
 	gboolean main_header = main_header_add || main_header_only;
 
+	enum { ML_HEADER_WIDTH = 79 };
+	enum { ML_VALUE_INDENT = 40 };
+
 	if (terse) {
 		/* No headers are printed in terse mode:
 		 * - neither main header nor field (column) names
@@ -1066,29 +1069,37 @@ print_required_fields (NmCli *nmc, const NmcOutputField field_values[])
 		not_set_str = "";
 	}
 
-	if (multiline) {
-	/* --- Multiline mode --- */
-		enum { ML_HEADER_WIDTH = 79 };
-		enum { ML_VALUE_INDENT = 40 };
-		if (main_header && pretty) {
-			/* Print the main header */
-			int header_width = nmc_string_screen_width (fields.header_name, NULL) + 4;
-			table_width = header_width < ML_HEADER_WIDTH ? ML_HEADER_WIDTH : header_width;
 
+	/* --- Main header --- */
+	if (main_header && pretty) {
+			int header_width = nmc_string_screen_width (fields.header_name, NULL) + 4;
+
+		if (multiline) {
+			table_width = header_width < ML_HEADER_WIDTH ? ML_HEADER_WIDTH : header_width;
 			line = g_strnfill (ML_HEADER_WIDTH, '=');
-			width1 = strlen (fields.header_name);
-			width2 = nmc_string_screen_width (fields.header_name, NULL);
-			g_print ("%s\n", line);
-			g_print ("%*s\n", (table_width + width2)/2 + width1 - width2, fields.header_name);
-			g_print ("%s\n", line);
-			g_free (line);
+		} else { /* tabular */
+			table_width = table_width < header_width ? header_width : table_width;
+			line = g_strnfill (table_width, '=');
 		}
 
-		/* Print values */
-		if (!main_header_only && !field_names) {
+		width1 = strlen (fields.header_name);
+		width2 = nmc_string_screen_width (fields.header_name, NULL);
+		g_print ("%s\n", line);
+		g_print ("%*s\n", (table_width + width2)/2 + width1 - width2, fields.header_name);
+		g_print ("%s\n", line);
+		g_free (line);
+	}
+
+	if (main_header_only)
+		return;
+
+
+	if (multiline) {
+	/* --- Multiline mode --- */
+		if (!field_names) {
 			for (i = 0; i < fields.indices->len; i++) {
 				char *tmp;
-				gboolean free_print_val;
+				gboolean dealloc;
 				int idx = g_array_index (fields.indices, int, i);
 				gboolean is_array = field_values[idx].value_is_array;
 
@@ -1107,7 +1118,7 @@ print_required_fields (NmCli *nmc, const NmcOutputField field_values[])
 					for (p = (const char **) field_values[idx].value, j = 1; p && *p; p++, j++) {
 						val = *p ? *p : not_set_str;
 						print_val = colorize_string (nmc, field_values[idx].color, field_values[idx].color_fmt,
-						                             val, &free_print_val);
+						                             val, &dealloc);
 						tmp = g_strdup_printf ("%s%s%s[%d]:",
 						                       section_prefix ? (const char*) field_values[0].value : "",
 						                       section_prefix ? "." : "",
@@ -1117,7 +1128,7 @@ print_required_fields (NmCli *nmc, const NmcOutputField field_values[])
 						width2 = nmc_string_screen_width (tmp, NULL);
 						g_print ("%-*s%s\n", terse ? 0 : ML_VALUE_INDENT+width1-width2, tmp, print_val);
 						g_free (tmp);
-						if (free_print_val)
+						if (dealloc)
 							g_free (print_val);
 					}
 				} else {
@@ -1128,7 +1139,7 @@ print_required_fields (NmCli *nmc, const NmcOutputField field_values[])
 
 					val = val && *val ? val : not_set_str;
 					print_val = colorize_string (nmc, field_values[idx].color, field_values[idx].color_fmt,
-					                             val, &free_print_val);
+					                             val, &dealloc);
 					tmp = g_strdup_printf ("%s%s%s:",
 					                       section_prefix ? hdr_name : "",
 					                       section_prefix ? "." : "",
@@ -1137,7 +1148,7 @@ print_required_fields (NmCli *nmc, const NmcOutputField field_values[])
 					width2 = nmc_string_screen_width (tmp, NULL);
 					g_print ("%-*s%s\n", terse ? 0 : ML_VALUE_INDENT+width1-width2, tmp, print_val);
 					g_free (tmp);
-					if (free_print_val)
+					if (dealloc)
 						g_free (print_val);
 				}
 			}
@@ -1151,6 +1162,7 @@ print_required_fields (NmCli *nmc, const NmcOutputField field_values[])
 	}
 
 	/* --- Tabular mode: each line = one object --- */
+
 	str = g_string_new (NULL);
 
 	for (i = 0; i < fields.indices->len; i++) {
@@ -1184,22 +1196,8 @@ print_required_fields (NmCli *nmc, const NmcOutputField field_values[])
 			g_free (value);
 	}
 
-	/* Print the main table header */
-	if (main_header && pretty) {
-		int header_width = nmc_string_screen_width (fields.header_name, NULL) + 4;
-		table_width = table_width < header_width ? header_width : table_width;
-
-		line = g_strnfill (table_width, '=');
-		width1 = strlen (fields.header_name);
-		width2 = nmc_string_screen_width (fields.header_name, NULL);
-		g_print ("%s\n", line);
-		g_print ("%*s\n", (table_width + width2)/2 + width1 - width2, fields.header_name);
-		g_print ("%s\n", line);
-		g_free (line);
-	}
-
 	/* Print actual values */
-	if (!main_header_only && str->len > 0) {
+	if (str->len > 0) {
 		g_string_truncate (str, str->len-1);  /* Chop off last column separator */
 		if (fields.indent > 0) {
 			indent_str = g_strnfill (fields.indent, ' ');
@@ -1207,11 +1205,9 @@ print_required_fields (NmCli *nmc, const NmcOutputField field_values[])
 			g_free (indent_str);
 		}
 		g_print ("%s\n", str->str);
-	}
 
-	/* Print horizontal separator */
-	if (!main_header_only && field_names && pretty) {
-		if (str->len > 0) {
+		/* Print horizontal separator */
+		if (field_names && pretty) {
 			line = g_strnfill (table_width, '-');
 			g_print ("%s\n", line);
 			g_free (line);
