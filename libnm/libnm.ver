@@ -1165,4 +1165,6 @@ global:
 	nm_setting_dummy_get_type;
 	nm_setting_dummy_new;
 	nm_setting_gsm_get_mtu;
+	nm_utils_format_ip_route_attributes;
+	nm_utils_parse_ip_route_attributes;
 } libnm_1_6_0;

@@ -215,6 +215,20 @@ const char **nm_utils_enum_get_values (GType type, gint from, gint to);
 NM_AVAILABLE_IN_1_6
 guint nm_utils_version (void);
 
+NM_AVAILABLE_IN_1_8
+GHashTable * nm_utils_parse_ip_route_attributes (const char *string,
+                                                 const char *attr_separator,
+                                                 char key_value_separator,
+                                                 gboolean ignore_unknown,
+                                                 gboolean ipv4,
+                                                 GError **error);
+
+NM_AVAILABLE_IN_1_8
+void nm_utils_format_ip_route_attributes (GHashTable *attributes,
+                                          const char *attr_separator,
+                                          char key_value_separator,
+                                          char **string);
+
 G_END_DECLS
 
 #endif /* __NM_UTILS_H__ */

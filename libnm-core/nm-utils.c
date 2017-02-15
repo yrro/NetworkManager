@@ -4697,6 +4697,151 @@ _nm_utils_team_config_equal (const char *conf1,
 }
 #endif
 
+/**
+ * nm_utils_parse_ip_route_attributes:
+ * @string: the input string
+ * @attr_separator: the attribute separator string
+ * @key_value_separator: character separating key and values
+ * @ignore_unknown: whether unknown attributes should be ignored
+ * @ipv4: whether the attribute belong to a IPv4 route
+ * @error: location to store the error on failure
+ *
+ * Parse route options from a string.
+ *
+ * Returns: a #GHashTable mapping attribute names to #GVariant values.
+ *
+ * Since: 1.8
+ */
+GHashTable *
+nm_utils_parse_ip_route_attributes (const char *string,
+                                    const char *attr_separator,
+                                    char key_value_separator,
+                                    gboolean ignore_unknown,
+                                    gboolean ipv4,
+                                    GError **error)
+{
+	gs_strfreev char **tokens = NULL;
+	char **token, *sep;
+	const GVariantType *type;
+	gs_unref_hashtable GHashTable *ht = NULL;
+	GVariant *variant;
+
+	g_return_val_if_fail (string, NULL);
+	g_return_val_if_fail (attr_separator, NULL);
+	g_return_val_if_fail (key_value_separator, NULL);
+	g_return_val_if_fail (!error || !*error, NULL);
+
+	tokens = g_strsplit (string, attr_separator, 0);
+	ht = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify) g_variant_unref);
+
+	for (token = tokens; token && *token; token++) {
+		sep = strchr (*token, key_value_separator);
+		if (!sep)
+			continue;
+		*sep = '\0';
+
+		type = nm_ip_route_attribute_get_valid_type (*token);
+		if (!type) {
+			if (ignore_unknown)
+				continue;
+			else {
+				g_set_error (error, NM_CONNECTION_ERROR, NM_CONNECTION_ERROR_FAILED,
+				             "unknown attribute '%s'", *token);
+				return NULL;
+			}
+		}
+
+		if (g_variant_type_equal (type, G_VARIANT_TYPE_UINT32)) {
+			gint64 num = _nm_utils_ascii_str_to_int64 (sep + 1, 10, 0, G_MAXUINT32, -1);
+
+			if (num == -1) {
+				g_set_error (error, NM_CONNECTION_ERROR, NM_CONNECTION_ERROR_FAILED,
+				             "invalid uint32 value '%s' for attribute '%s'", sep + 1, *token);
+				return NULL;
+			}
+			variant = g_variant_new_uint32 (num);
+		} else if (g_variant_type_equal (type, G_VARIANT_TYPE_BOOLEAN)) {
+			gboolean b;
+
+			if (nm_streq (sep + 1, "true"))
+				b = TRUE;
+			else if (nm_streq (sep + 1, "false"))
+				b = FALSE;
+			else {
+				g_set_error (error, NM_CONNECTION_ERROR, NM_CONNECTION_ERROR_FAILED,
+				             "invalid boolean value '%s' for attribute '%s'", sep + 1, *token);
+				return NULL;
+			}
+			variant = g_variant_new_boolean (b);
+		} else if (g_variant_type_equal (type, G_VARIANT_TYPE_STRING)) {
+			variant = g_variant_new_string (sep + 1);
+		} else {
+			g_set_error (error, NM_CONNECTION_ERROR, NM_CONNECTION_ERROR_FAILED,
+			             "unsupported attribute '%s' of type '%s'", *token,
+			             (char *) type);
+			return NULL;
+		}
+
+		if (!nm_ip_route_attribute_validate (*token, variant, ipv4, NULL, error)) {
+			g_prefix_error (error, "invalid value '%s' for attribute '%s':", *token, sep + 1);
+			return NULL;
+		}
+
+		g_hash_table_insert (ht, g_strdup (*token), variant);
+	}
+
+	return g_steal_pointer (&ht);
+}
+
+/*
+ * nm_utils_format_ip_route_attributes:
+ * @attributes:  a #GHashTable mapping attribute names to #GVariant values
+ * @attr_separator: the attribute separator string
+ * @key_value_separator: character separating key and values
+ * @str_out: location to store the output string
+ *
+ * Format route attributes to a string.
+ *
+ * Since: 1.8
+ */
+void
+nm_utils_format_ip_route_attributes (GHashTable *attributes,
+                                     const char *attr_separator,
+                                     char key_value_separator,
+                                     char **str_out)
+{
+	GString *str = NULL;
+	GVariant *variant;
+	const char *sep = "";
+	GHashTableIter iter;
+	char *name;
+
+	g_return_if_fail (str_out);
+	g_return_if_fail (attr_separator);
+	g_return_if_fail (key_value_separator);
+
+	if (!attributes)
+		*str_out = NULL;
+
+	str = g_string_new ("");
+
+	g_hash_table_iter_init (&iter, attributes);
+	while (g_hash_table_iter_next (&iter, (gpointer *) &name, (gpointer *) &variant)) {
+		g_string_append (str, sep);
+		if (g_variant_is_of_type (variant, G_VARIANT_TYPE_UINT32))
+			g_string_append_printf (str, "%s%c%u", name, key_value_separator, g_variant_get_uint32 (variant));
+		else if (g_variant_is_of_type (variant, G_VARIANT_TYPE_BOOLEAN))
+			g_string_append_printf (str, "%s%c%s", name, key_value_separator, g_variant_get_boolean (variant) ? "true" : "false");
+		else if (g_variant_is_of_type (variant, G_VARIANT_TYPE_STRING))
+			g_string_append_printf (str, "%s%c%s", name, key_value_separator, g_variant_get_string (variant, NULL));
+		else
+			continue;
+		sep = attr_separator;
+	}
+
+	*str_out = str ? g_string_free (str, FALSE) : NULL;
+}
+
 /*****************************************************************************/
 
 /**
