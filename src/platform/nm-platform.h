@@ -324,9 +324,13 @@ typedef union {
 	 * of platform users. This flag is internal to track those hidden
 	 * routes. Such a route is not alive, according to nmp_object_is_alive(). */ \
 	bool rt_cloned:1; \
+	bool lock_cwnd:1; \
+	bool lock_mtu:1; \
 	\
 	guint32 metric; \
 	guint32 mss; \
+	guint32 cwnd; \
+	guint32 mtu; \
 	;
 
 typedef struct {
@@ -359,6 +363,8 @@ struct _NMPlatformIP6Route {
 	struct in6_addr network;
 	struct in6_addr gateway;
 	struct in6_addr pref_src;
+	struct in6_addr src;
+	guint8 src_plen;
 };
 
 typedef union {

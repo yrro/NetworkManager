@@ -1832,7 +1832,7 @@ _new_from_nl_route (struct nlmsghdr *nlh, gboolean id_only)
 		int ifindex;
 		NMIPAddr gateway;
 	} nh;
-	guint32 mss;
+	guint32 mss = 0, cwnd = 0, mtu = 0, lock = 0;
 	guint32 table;
 
 	if (!nlmsg_valid_hdr (nlh, sizeof (*rtm)))
@@ -1941,21 +1941,25 @@ _new_from_nl_route (struct nlmsghdr *nlh, gboolean id_only)
 	mss = 0;
 	if (tb[RTA_METRICS]) {
 		struct nlattr *mtb[RTAX_MAX + 1];
-		int i;
+		static struct nla_policy rtax_policy[RTAX_MAX + 1] = {
+			[RTAX_LOCK]        = { .type = NLA_U32 },
+			[RTAX_ADVMSS]      = { .type = NLA_U32 },
+			[RTAX_CWND]        = { .type = NLA_U32 },
+			[RTAX_MTU]         = { .type = NLA_U32 },
+		};
 
-		err = nla_parse_nested(mtb, RTAX_MAX, tb[RTA_METRICS], NULL);
+		err = nla_parse_nested (mtb, RTAX_MAX, tb[RTA_METRICS], rtax_policy);
 		if (err < 0)
 			goto errout;
 
-		for (i = 1; i <= RTAX_MAX; i++) {
-			if (mtb[i]) {
-				if (i == RTAX_ADVMSS) {
-					if (nla_len (mtb[i]) >= sizeof (uint32_t))
-						mss = nla_get_u32(mtb[i]);
-					break;
-				}
-			}
-		}
+		if (mtb[RTAX_LOCK])
+			lock = nla_get_u32 (mtb[RTAX_LOCK]);
+		if (mtb[RTAX_ADVMSS])
+			mss = nla_get_u32 (mtb[RTAX_ADVMSS]);
+		if (mtb[RTAX_CWND])
+			cwnd = nla_get_u32 (mtb[RTAX_CWND]);
+		if (mtb[RTAX_MTU])
+			mtu = nla_get_u32 (mtb[RTAX_MTU]);
 	}
 
 	/*****************************************************************/
@@ -1987,7 +1991,17 @@ _new_from_nl_route (struct nlmsghdr *nlh, gboolean id_only)
 			memcpy (&obj->ip6_route.pref_src, nla_data (tb[RTA_PREFSRC]), addr_len);
 	}
 
+	if (!is_v4 && tb[RTA_SRC]) {
+		_check_addr_or_errout (tb, RTA_SRC, addr_len);
+		memcpy (&obj->ip6_route.src, nla_data (tb[RTA_SRC]), addr_len);
+		obj->ip6_route.src_plen = rtm->rtm_src_len;
+	}
+
 	obj->ip_route.mss = mss;
+	obj->ip_route.cwnd = cwnd;
+	obj->ip_route.mtu = mtu;
+	obj->ip_route.lock_cwnd = NM_FLAGS_HAS (lock, 1 << RTAX_CWND);
+	obj->ip_route.lock_mtu  = NM_FLAGS_HAS (lock, 1 << RTAX_MTU);
 
 	if (NM_FLAGS_HAS (rtm->rtm_flags, RTM_F_CLONED)) {
 		/* we must not straight way reject cloned routes, because we might have cached
@@ -2362,7 +2376,13 @@ _nl_msg_new_route (int nlmsg_type,
                    gconstpointer gateway,
                    guint32 metric,
                    guint32 mss,
-                   gconstpointer pref_src)
+                   gconstpointer pref_src,
+                   gconstpointer src,
+                   guint8 src_plen,
+                   guint32 cwnd,
+                   guint32 mtu,
+                   bool lock_cwnd,
+                   bool lock_mtu)
 {
 	struct nl_msg *msg;
 	struct rtmsg rtmsg = {
@@ -2374,9 +2394,10 @@ _nl_msg_new_route (int nlmsg_type,
 		.rtm_type = RTN_UNICAST,
 		.rtm_flags = 0,
 		.rtm_dst_len = plen,
-		.rtm_src_len = 0,
+		.rtm_src_len = src ? src_plen : 0,
 	};
 	NMIPAddr network_clean;
+	guint32 lock;
 
 	gsize addr_len;
 
@@ -2396,19 +2417,30 @@ _nl_msg_new_route (int nlmsg_type,
 	nm_utils_ipx_address_clear_host_address (family, &network_clean, network, plen);
 	NLA_PUT (msg, RTA_DST, addr_len, &network_clean);
 
+	if (src)
+		NLA_PUT (msg, RTA_SRC, addr_len, src);
+
 	NLA_PUT_U32 (msg, RTA_PRIORITY, metric);
 
 	if (pref_src)
 		NLA_PUT (msg, RTA_PREFSRC, addr_len, pref_src);
 
-	if (mss > 0) {
+	lock = (lock_cwnd << RTAX_CWND) | (lock_mtu << RTAX_MTU);
+	if (mss || cwnd || mtu || lock) {
 		struct nlattr *metrics;
 
 		metrics = nla_nest_start (msg, RTA_METRICS);
 		if (!metrics)
 			goto nla_put_failure;
 
-		NLA_PUT_U32 (msg, RTAX_ADVMSS, mss);
+		if (mss)
+			NLA_PUT_U32 (msg, RTAX_ADVMSS, mss);
+		if (cwnd)
+			NLA_PUT_U32 (msg, RTAX_CWND, cwnd);
+		if (mtu)
+			NLA_PUT_U32 (msg, RTAX_MTU, mtu);
+		if (lock)
+			NLA_PUT_U32 (msg, RTAX_LOCK, lock);
 
 		nla_nest_end(msg, metrics);
 	}
@@ -5924,7 +5956,13 @@ ip4_route_add (NMPlatform *platform, const NMPlatformIP4Route *route)
 	                           &route->gateway,
 	                           route->metric,
 	                           route->mss,
-	                           route->pref_src ? &route->pref_src : NULL);
+	                           route->pref_src ? &route->pref_src : NULL,
+	                           NULL,
+	                           0,
+	                           route->cwnd,
+	                           route->mtu,
+	                           route->lock_cwnd,
+	                           route->lock_mtu);
 
 	nmp_object_stackinit_id_ip4_route (&obj_id, route->ifindex, route->network, route->plen, route->metric);
 	return do_add_addrroute (platform, &obj_id, nlmsg);
@@ -5951,7 +5989,13 @@ ip6_route_add (NMPlatform *platform, const NMPlatformIP6Route *route)
 	                           &route->gateway,
 	                           route->metric,
 	                           route->mss,
-	                           !IN6_IS_ADDR_UNSPECIFIED (&route->pref_src) ? &route->pref_src : NULL);
+	                           !IN6_IS_ADDR_UNSPECIFIED (&route->pref_src) ? &route->pref_src : NULL,
+	                           !IN6_IS_ADDR_UNSPECIFIED (&route->src) ? &route->src : NULL,
+	                           route->src_plen,
+	                           route->cwnd,
+	                           route->mtu,
+	                           route->lock_cwnd,
+	                           route->lock_mtu);
 
 	nmp_object_stackinit_id_ip6_route (&obj_id, route->ifindex, &route->network, route->plen, route->metric);
 	return do_add_addrroute (platform, &obj_id, nlmsg);
@@ -6006,7 +6050,13 @@ ip4_route_delete (NMPlatform *platform, int ifindex, in_addr_t network, guint8 p
 	                           NULL,
 	                           metric,
 	                           0,
-	                           NULL);
+	                           NULL,
+	                           NULL,
+	                           0,
+	                           0,
+	                           0,
+	                           FALSE,
+	                           FALSE);
 	if (!nlmsg)
 		return FALSE;
 
@@ -6032,7 +6082,13 @@ ip6_route_delete (NMPlatform *platform, int ifindex, struct in6_addr network, gu
 	                           NULL,
 	                           metric,
 	                           0,
-	                           NULL);
+	                           NULL,
+	                           NULL,
+	                           0,
+	                           0,
+	                           0,
+	                           FALSE,
+	                           FALSE);
 	if (!nlmsg)
 		return FALSE;
 
