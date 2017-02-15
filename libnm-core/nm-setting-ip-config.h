@@ -121,7 +121,21 @@ GVariant    *nm_ip_route_get_attribute       (NMIPRoute   *route,
 void         nm_ip_route_set_attribute       (NMIPRoute   *route,
                                               const char  *name,
                                               GVariant    *value);
+NM_AVAILABLE_IN_1_8
+const GVariantType *nm_ip_route_attribute_get_valid_type (const char *name);
+NM_AVAILABLE_IN_1_8
+gboolean     nm_ip_route_attribute_validate  (const char *name,
+                                              GVariant *value,
+                                              gboolean ipv4,
+                                              gboolean *known,
+                                              GError **error);
 
+#define NM_IP_ROUTE_ATTRIBUTE_PREF_SRC       "pref-src"
+#define NM_IP_ROUTE_ATTRIBUTE_SRC            "src"
+#define NM_IP_ROUTE_ATTRIBUTE_CWND           "cwnd"
+#define NM_IP_ROUTE_ATTRIBUTE_MTU            "mtu"
+#define NM_IP_ROUTE_ATTRIBUTE_LOCK_CWND      "lock-cwnd"
+#define NM_IP_ROUTE_ATTRIBUTE_LOCK_MTU       "lock-mtu"
 
 #define NM_TYPE_SETTING_IP_CONFIG            (nm_setting_ip_config_get_type ())
 #define NM_SETTING_IP_CONFIG(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), NM_TYPE_SETTING_IP_CONFIG, NMSettingIPConfig))

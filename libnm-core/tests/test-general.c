@@ -643,6 +643,44 @@ test_setting_ip4_config_address_data (void)
 }
 
 static void
+test_setting_ip_route_attributes (void)
+{
+	GVariant *variant;
+	gboolean res, known;
+
+#define TEST_ATTR(name, type, value, family, exp_res, exp_known) \
+	variant = g_variant_new_ ## type (value); \
+	res = nm_ip_route_attribute_validate (name, variant, family == AF_INET, &known, NULL); \
+	g_assert (res == exp_res); \
+	g_assert (known == exp_known); \
+	g_variant_unref (variant);
+
+	TEST_ATTR ("foo", uint32, 12, AF_INET, FALSE, FALSE);
+
+	TEST_ATTR ("cwnd",  uint32, 10,    AF_INET, TRUE,  TRUE);
+	TEST_ATTR ("cwnd",  string, "11",  AF_INET, FALSE, TRUE);
+
+	TEST_ATTR ("lock-mtu", boolean, TRUE, AF_INET, TRUE,  TRUE);
+	TEST_ATTR ("lock-mtu", uint32,  1,    AF_INET, FALSE, TRUE);
+
+	TEST_ATTR ("src", string, "fd01::1",     AF_INET6, TRUE,  TRUE);
+	TEST_ATTR ("src", string, "fd01::1/64",  AF_INET6, TRUE,  TRUE);
+	TEST_ATTR ("src", string, "fd01::1/128", AF_INET6, TRUE,  TRUE);
+	TEST_ATTR ("src", string, "fd01::1/129", AF_INET6, FALSE, TRUE);
+	TEST_ATTR ("src", string, "fd01::1/a",   AF_INET6, FALSE, TRUE);
+	TEST_ATTR ("src", string, "abc/64",      AF_INET6, FALSE, TRUE);
+	TEST_ATTR ("src", string, "1.2.3.4",     AF_INET,  FALSE, TRUE);
+	TEST_ATTR ("src", string, "1.2.3.4",     AF_INET6, FALSE, TRUE);
+
+	TEST_ATTR ("pref-src", string, "1.2.3.4",    AF_INET,  TRUE,  TRUE);
+	TEST_ATTR ("pref-src", string, "1.2.3.4",    AF_INET6, FALSE, TRUE);
+	TEST_ATTR ("pref-src", string, "1.2.3.0/24", AF_INET,  FALSE, TRUE);
+	TEST_ATTR ("pref-src", string, "fd01::12",   AF_INET6, TRUE,  TRUE);
+
+#undef TEST_ATTR
+}
+
+static void
 test_setting_gsm_apn_spaces (void)
 {
 	gs_unref_object NMSettingGsm *s_gsm = NULL;
@@ -5467,6 +5505,7 @@ int main (int argc, char **argv)
 	g_test_add_func ("/core/general/test_setting_vpn_modify_during_foreach", test_setting_vpn_modify_during_foreach);
 	g_test_add_func ("/core/general/test_setting_ip4_config_labels", test_setting_ip4_config_labels);
 	g_test_add_func ("/core/general/test_setting_ip4_config_address_data", test_setting_ip4_config_address_data);
+	g_test_add_func ("/core/general/test_setting_ip_route_attributes", test_setting_ip_route_attributes);
 	g_test_add_func ("/core/general/test_setting_gsm_apn_spaces", test_setting_gsm_apn_spaces);
 	g_test_add_func ("/core/general/test_setting_gsm_apn_bad_chars", test_setting_gsm_apn_bad_chars);
 	g_test_add_func ("/core/general/test_setting_gsm_apn_underscore", test_setting_gsm_apn_underscore);
