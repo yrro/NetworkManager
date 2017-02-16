@@ -266,7 +266,7 @@ active_connection_remove (NMManager *self, NMActiveConnection *active)
 
 		if (   nm_active_connection_get_assumed (active)
 		    && (connection = nm_active_connection_get_settings_connection (active))
-		    && nm_settings_connection_get_nm_generated_assumed (connection))
+		    && nm_settings_connection_get_garbage_collect (connection))
 			g_object_ref (connection);
 		else
 			connection = NULL;
@@ -1687,7 +1687,7 @@ done:
 static gboolean
 match_connection_filter (NMConnection *connection, gpointer user_data)
 {
-	if (nm_settings_connection_get_nm_generated_assumed (NM_SETTINGS_CONNECTION (connection)))
+	if (nm_settings_connection_get_garbage_collect (NM_SETTINGS_CONNECTION (connection)))
 		return FALSE;
 
 	return nm_device_check_connection_compatible (NM_DEVICE (user_data), connection);
@@ -1790,7 +1790,7 @@ get_existing_connection (NMManager *self, NMDevice *device, gboolean *out_genera
 	if (added) {
 		nm_settings_connection_set_flags (NM_SETTINGS_CONNECTION (added),
 		                                  NM_SETTINGS_CONNECTION_FLAGS_NM_GENERATED |
-		                                  NM_SETTINGS_CONNECTION_FLAGS_NM_GENERATED_ASSUMED,
+		                                  NM_SETTINGS_CONNECTION_FLAGS_GARBAGE_COLLECT,
 		                                  TRUE);
 		if (out_generated)
 			*out_generated = TRUE;
