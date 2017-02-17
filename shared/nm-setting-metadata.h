@@ -22,7 +22,16 @@
 #ifndef __NM_SETTING_METADATA_H__
 #define __NM_SETTING_METADATA_H__
 
+#include "nm-connection.h"
+#include "nm-setting-connection.h"
 #include "nm-setting-8021x.h"
+
+/*****************************************************************************/
+
+typedef const struct NMMetaType NMMetaType;
+typedef const struct NMMetaData NMMetaData;
+
+NMMetaData *nm_meta_data_get_for_connection (NMConnection *connection);
 
 /*****************************************************************************/
 
