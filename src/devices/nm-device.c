@@ -12803,8 +12803,8 @@ _hw_addr_get_cloned (NMDevice *self, NMConnection *connection, gboolean is_wifi,
 	gs_free char *hw_addr_generated = NULL;
 	gs_free char *generate_mac_address_mask_tmp = NULL;
 	const char *addr, *addr_setting;
-	char *addr_out = NULL;
-	HwAddrType type_out = HW_ADDR_TYPE_UNSET;
+	char *addr_out;
+	HwAddrType type_out;
 
 	g_return_val_if_fail (NM_IS_DEVICE (self), FALSE);
 	g_return_val_if_fail (NM_IS_CONNECTION (connection), FALSE);
@@ -12842,7 +12842,7 @@ _hw_addr_get_cloned (NMDevice *self, NMConnection *connection, gboolean is_wifi,
 			/* hm, we already use a generate MAC address. Most certainly, that is from the same
 			 * activation request, so we should not create a new random address, instead keep
 			 * the current. */
-			goto out;
+			goto out_no_action;
 		}
 		hw_addr_generated = nm_utils_hw_addr_gen_random_eth (nm_device_get_initial_hw_address (self),
 		                                                     _get_generate_mac_address_mask_setting (self, connection,
@@ -12855,8 +12855,9 @@ _hw_addr_get_cloned (NMDevice *self, NMConnection *connection, gboolean is_wifi,
 			             "failed to generate %s MAC address", "random");
 			return FALSE;
 		}
-		type_out = HW_ADDR_TYPE_GENERATED;
+
 		addr_out = g_steal_pointer (&hw_addr_generated);
+		type_out = HW_ADDR_TYPE_GENERATED;
 	} else if (NM_IN_STRSET (addr, NM_CLONED_MAC_STABLE)) {
 		NMUtilsStableType stable_type;
 		const char *stable_id;
@@ -12864,7 +12865,7 @@ _hw_addr_get_cloned (NMDevice *self, NMConnection *connection, gboolean is_wifi,
 		if (priv->hw_addr_type == HW_ADDR_TYPE_GENERATED) {
 			/* hm, we already use a generate MAC address. Most certainly, that is from the same
 			 * activation request, so let's skip creating the stable address anew. */
-			goto out;
+			goto out_no_action;
 		}
 
 		stable_id = _get_stable_id (self, connection, &stable_type);
@@ -12882,23 +12883,27 @@ _hw_addr_get_cloned (NMDevice *self, NMConnection *connection, gboolean is_wifi,
 			return FALSE;
 		}
 
-		type_out = HW_ADDR_TYPE_GENERATED;
 		addr_out = g_steal_pointer (&hw_addr_generated);
+		type_out = HW_ADDR_TYPE_GENERATED;
 	} else {
 		/* this must be a valid address. Otherwise, we shouldn't come here. */
 		if (!nm_utils_hwaddr_valid (addr, -1))
 			g_return_val_if_reached (FALSE);
 
-		type_out = HW_ADDR_TYPE_EXPLICIT;
 		addr_out = g_strdup (addr);
+		type_out = HW_ADDR_TYPE_EXPLICIT;
 	}
 
-out:
 	NM_SET_OUT (preserve, FALSE);
 	NM_SET_OUT (hwaddr, addr_out);
 	NM_SET_OUT (hwaddr_type, type_out);
 	NM_SET_OUT (hwaddr_detail, g_strdup (addr_setting));
-
+	return TRUE;
+out_no_action:
+	NM_SET_OUT (preserve, FALSE);
+	NM_SET_OUT (hwaddr, NULL);
+	NM_SET_OUT (hwaddr_type, HW_ADDR_TYPE_UNSET);
+	NM_SET_OUT (hwaddr_detail, NULL);
 	return TRUE;
 }
 
@@ -12933,7 +12938,10 @@ nm_device_hw_addr_set_cloned (NMDevice *self, NMConnection *connection, gboolean
 	if (preserve)
 		return nm_device_hw_addr_reset (self, detail);
 
-	return _hw_addr_set (self, hwaddr, "set-cloned", detail);
+	if (hwaddr)
+		return _hw_addr_set (self, hwaddr, "set-cloned", detail);
+
+	return TRUE;
 }
 
 gboolean
