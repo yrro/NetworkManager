@@ -12820,8 +12820,8 @@ _hw_addr_get_cloned (NMDevice *self, NMConnection *connection, gboolean is_wifi,
 	if (nm_streq (addr, NM_CLONED_MAC_PRESERVE)) {
 		/* "preserve" means to reset the initial MAC address. */
 		NM_SET_OUT (preserve, TRUE);
-		NM_SET_OUT (hwaddr, addr_out);
-		NM_SET_OUT (hwaddr_type, type_out);
+		NM_SET_OUT (hwaddr, NULL);
+		NM_SET_OUT (hwaddr_type, HW_ADDR_TYPE_UNSET);
 		NM_SET_OUT (hwaddr_detail, g_strdup (addr_setting));
 		return TRUE;
 	}
