@@ -585,6 +585,7 @@ else
     fi
     AC_DEFINE(WITH_JANSSON, 1, [Define if JANSSON is enabled])
 fi
+AM_CONDITIONAL(WITH_JANSSON, test "${enable_json_validation}" != "no")
 
 # we usually compile with polkit support. --enable-polkit=yes|no only sets the
 # default configuration for main.auth-polkit. User can always enable/disable polkit
@@ -1251,6 +1252,6 @@ echo "  valgrind: $with_valgrind   $with_valgrind_suppressions"
 echo "  code coverage: $enable_code_coverage"
 echo "  LTO: $enable_lto"
 echo "  linker garbage collection: $enable_ld_gc"
-echo "  JSON validation: $enable_json_validation"
+echo "  JSON validation for libnm: $enable_json_validation"
 echo "  sanitizers: $sanitizers"
 echo
