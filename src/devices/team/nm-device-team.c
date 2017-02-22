@@ -575,14 +575,14 @@ teamd_start (NMDevice *device, NMConnection *connection)
 		if (hwaddr) {
 			if (   !json_is_string (hwaddr)
 			    || !nm_streq0 (json_string_value (hwaddr), cloned_mac))
-				_LOGW (LOGD_TEAM, "can't set team cloned-mac-address as the JSON configuration already contains \"hwaddr\"");
+				_LOGW (LOGD_TEAM, "set-hw-addr: can't set team cloned-mac-address as the JSON configuration already contains \"hwaddr\"");
 		} else {
 			hwaddr = json_string (cloned_mac);
 			json_object_set (json, "hwaddr", hwaddr);
 			config = config_free = json_dumps (json, JSON_INDENT(0) |
 			                                         JSON_ENSURE_ASCII |
 			                                         JSON_SORT_KEYS);
-			_LOGD (LOGD_TEAM, "injected \"hwaddr\" : \"%s\" into team configuration", cloned_mac);
+			_LOGD (LOGD_TEAM, "set-hw-addr: injected \"hwaddr\" \"%s\" into team configuration", cloned_mac);
 			json_decref (hwaddr);
 		}
 		json_decref (json);
