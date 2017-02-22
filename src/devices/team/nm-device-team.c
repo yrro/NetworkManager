@@ -526,7 +526,7 @@ teamd_start (NMDevice *device, NMConnection *connection)
 	const char *config;
 	nm_auto_free const char *config_free = NULL;
 	NMSettingTeam *s_team;
-	char *cloned_mac = NULL;
+	gs_free char *cloned_mac = NULL;
 
 	s_team = nm_connection_get_setting_team (connection);
 	g_return_val_if_fail (s_team, FALSE);
