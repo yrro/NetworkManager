@@ -524,7 +524,7 @@ teamd_start (NMDevice *device, NMConnection *connection)
 	gs_free char *tmp_str = NULL;
 	const char *teamd_binary;
 	const char *config;
-	gs_free const char *config_free = NULL;
+	nm_auto_free const char *config_free = NULL;
 	NMSettingTeam *s_team;
 	char *cloned_mac = NULL;
 
