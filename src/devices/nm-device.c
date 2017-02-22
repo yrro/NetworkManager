@@ -12916,7 +12916,7 @@ gboolean
 nm_device_hw_addr_set_cloned (NMDevice *self, NMConnection *connection, gboolean is_wifi)
 {
 	NMDevicePrivate *priv;
-	gboolean reset = FALSE;
+	gboolean preserve = FALSE;
 	gs_free char *hwaddr = NULL;
 	gs_free char *detail = NULL;
 	HwAddrType type = HW_ADDR_TYPE_UNSET;
@@ -12925,12 +12925,12 @@ nm_device_hw_addr_set_cloned (NMDevice *self, NMConnection *connection, gboolean
 	g_return_val_if_fail (NM_IS_DEVICE (self), FALSE);
 	priv = NM_DEVICE_GET_PRIVATE (self);
 
-	if (!_hw_addr_get_cloned (self, connection, is_wifi, &reset, &hwaddr, &type, &detail, &error)) {
+	if (!_hw_addr_get_cloned (self, connection, is_wifi, &preserve, &hwaddr, &type, &detail, &error)) {
 		_LOGW (LOGD_DEVICE, "set-hw-addr: %s", error->message);
 		return FALSE;
 	}
 
-	if (reset)
+	if (preserve)
 		return nm_device_hw_addr_reset (self, detail);
 
 	return _hw_addr_set (self, hwaddr, "set-cloned", detail);
