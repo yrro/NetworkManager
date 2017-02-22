@@ -12799,7 +12799,7 @@ _hw_addr_get_cloned (NMDevice *self, NMConnection *connection, gboolean is_wifi,
                      char **hwaddr_detail, GError **error)
 {
 	NMDevicePrivate *priv;
-	gs_free char *hw_addr_tmp = NULL;
+	gs_free char *addr_setting_free = NULL;
 	gs_free char *hw_addr_generated = NULL;
 	gs_free char *generate_mac_address_mask_tmp = NULL;
 	const char *addr, *addr_setting;
@@ -12815,14 +12815,14 @@ _hw_addr_get_cloned (NMDevice *self, NMConnection *connection, gboolean is_wifi,
 	if (!connection)
 		g_return_val_if_reached (FALSE);
 
-	addr = addr_setting = _get_cloned_mac_address_setting (self, connection, is_wifi, &hw_addr_tmp);
+	addr = addr_setting = _get_cloned_mac_address_setting (self, connection, is_wifi, &addr_setting_free);
 
 	if (nm_streq (addr, NM_CLONED_MAC_PRESERVE)) {
 		/* "preserve" means to reset the initial MAC address. */
 		NM_SET_OUT (preserve, TRUE);
 		NM_SET_OUT (hwaddr, NULL);
 		NM_SET_OUT (hwaddr_type, HW_ADDR_TYPE_UNSET);
-		NM_SET_OUT (hwaddr_detail, g_strdup (addr_setting));
+		NM_SET_OUT (hwaddr_detail, g_steal_pointer (&addr_setting_free) ?: g_strdup (addr_setting));
 		return TRUE;
 	}
 
@@ -12897,7 +12897,7 @@ _hw_addr_get_cloned (NMDevice *self, NMConnection *connection, gboolean is_wifi,
 	NM_SET_OUT (preserve, FALSE);
 	NM_SET_OUT (hwaddr, addr_out);
 	NM_SET_OUT (hwaddr_type, type_out);
-	NM_SET_OUT (hwaddr_detail, g_strdup (addr_setting));
+	NM_SET_OUT (hwaddr_detail, g_steal_pointer (&addr_setting_free) ?: g_strdup (addr_setting));
 	return TRUE;
 out_no_action:
 	NM_SET_OUT (preserve, FALSE);
