@@ -5964,7 +5964,7 @@ ip4_route_add (NMPlatform *platform, const NMPlatformIP4Route *route)
 	                           route->lock_cwnd,
 	                           route->lock_mtu);
 
-	nmp_object_stackinit_id_ip4_route (&obj_id, route->ifindex, route->network, route->plen, route->metric);
+	nmp_object_stackinit_id_ip4_route (&obj_id, route->ifindex, network, route->plen, route->metric);
 	return do_add_addrroute (platform, &obj_id, nlmsg);
 }
 
@@ -5997,7 +5997,7 @@ ip6_route_add (NMPlatform *platform, const NMPlatformIP6Route *route)
 	                           route->lock_cwnd,
 	                           route->lock_mtu);
 
-	nmp_object_stackinit_id_ip6_route (&obj_id, route->ifindex, &route->network, route->plen, route->metric);
+	nmp_object_stackinit_id_ip6_route (&obj_id, route->ifindex, &network, route->plen, route->metric);
 	return do_add_addrroute (platform, &obj_id, nlmsg);
 }
 
