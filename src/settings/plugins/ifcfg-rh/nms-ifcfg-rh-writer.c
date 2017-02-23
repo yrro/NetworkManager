@@ -2451,15 +2451,13 @@ write_ip4_aliases (NMConnection *connection, char *base_ifcfg_path)
 static gboolean
 write_route6_file (const char *filename, NMSettingIPConfig *s_ip6, GError **error)
 {
-	GString *contents;
+	nm_auto_free_gstring GString *contents = NULL;
 	NMIPRoute *route;
 	guint32 i, num;
-	gboolean success = FALSE;
 
-	g_return_val_if_fail (filename != NULL, FALSE);
-	g_return_val_if_fail (s_ip6 != NULL, FALSE);
-	g_return_val_if_fail (error != NULL, FALSE);
-	g_return_val_if_fail (*error == NULL, FALSE);
+	g_return_val_if_fail (filename, FALSE);
+	g_return_val_if_fail (s_ip6, FALSE);
+	g_return_val_if_fail (!error || !*error, FALSE);
 
 	num = nm_setting_ip_config_get_num_routes (s_ip6);
 	if (num == 0) {
@@ -2496,14 +2494,10 @@ write_route6_file (const char *filename, NMSettingIPConfig *s_ip6, GError **erro
 	if (!g_file_set_contents (filename, contents->str, -1, NULL)) {
 		g_set_error (error, NM_SETTINGS_ERROR, NM_SETTINGS_ERROR_FAILED,
 		             "Writing route6 file '%s' failed", filename);
-		goto error;
+		return FALSE;
 	}
 
-	success = TRUE;
-
-error:
-	g_string_free (contents, TRUE);
-	return success;
+	return TRUE;
 }
 
 static void
