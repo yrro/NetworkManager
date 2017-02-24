@@ -2794,12 +2794,6 @@ typedef struct {
 	NMDevice *device;
 } SlaveConnectionInfo;
 
-static void
-slave_connection_info_free (SlaveConnectionInfo *info)
-{
-	g_slice_free (SlaveConnectionInfo, info);
-}
-
 /**
  * find_slaves:
  * @manager: #NMManager object
@@ -2811,20 +2805,25 @@ slave_connection_info_free (SlaveConnectionInfo *info)
  *
  * Returns: a #GPtrArray of slave connections for given master @connection, or %NULL
  **/
-static GPtrArray *
+static SlaveConnectionInfo *
 find_slaves (NMManager *manager,
              NMSettingsConnection *connection,
-             NMDevice *device)
+             NMDevice *device,
+             guint *out_n_slaves)
 {
 	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (manager);
 	gs_free NMSettingsConnection **all_connections = NULL;
+	guint n_all_connections;
 	guint i;
-	GPtrArray *slaves = NULL;
+	SlaveConnectionInfo *slaves = NULL;
+	guint n_slaves = 0;
 	NMSettingConnection *s_con;
 	gs_unref_hashtable GHashTable *devices = NULL;
 
+	nm_assert (out_n_slaves);
+
 	s_con = nm_connection_get_setting_connection (NM_CONNECTION (connection));
-	g_assert (s_con);
+	g_return_val_if_fail (s_con, NULL);
 
 	devices = g_hash_table_new (g_direct_hash, g_direct_equal);
 
@@ -2832,12 +2831,11 @@ find_slaves (NMManager *manager,
 	 * even if a slave was already active, it might be deactivated during
 	 * master reactivation.
 	 */
-	all_connections = nm_settings_get_connections_sorted (priv->settings, NULL);
-	for (i = 0; all_connections[i]; i++) {
+	all_connections = nm_settings_get_connections_sorted (priv->settings, &n_all_connections);
+	for (i = 0; i < n_all_connections; i++) {
 		NMSettingsConnection *master_connection = NULL;
 		NMDevice *master_device = NULL, *slave_device;
 		NMConnection *candidate = NM_CONNECTION (all_connections[i]);
-		SlaveConnectionInfo *info;
 
 		find_master (manager, candidate, NULL, &master_connection, &master_device, NULL, NULL);
 		if (   (master_connection && master_connection == connection)
@@ -2847,19 +2845,25 @@ find_slaves (NMManager *manager,
 			                                                          FALSE,
 			                                                          devices);
 
-			info = g_slice_new (SlaveConnectionInfo);
-			info->connection = NM_SETTINGS_CONNECTION (candidate);
-			info->device = slave_device;
+			if (!slaves) {
+				/* what we allocate is quite likely much too large. Don't bother, it is only
+				 * a temporary buffer. */
+				slaves = g_new (SlaveConnectionInfo, n_all_connections);
+			}
 
-			if (!slaves)
-				slaves = g_ptr_array_new_with_free_func ((GDestroyNotify) slave_connection_info_free);
-			g_ptr_array_add (slaves, info);
+			nm_assert (n_slaves < n_all_connections);
+			slaves[n_slaves].connection = NM_SETTINGS_CONNECTION (candidate),
+			slaves[n_slaves].device = slave_device,
+			n_slaves++;
 
 			if (slave_device)
 				g_hash_table_add (devices, slave_device);
 		}
 	}
 
+	*out_n_slaves = n_slaves;
+
+	/* Warning: returns NULL if n_slaves is zero. */
 	return slaves;
 }
 
@@ -2893,7 +2897,7 @@ out:
 }
 
 static gint
-compare_slaves (gconstpointer a, gconstpointer b)
+compare_slaves (gconstpointer a, gconstpointer b, gpointer _unused)
 {
 	const SlaveConnectionInfo *a_info = *(SlaveConnectionInfo **) a;
 	const SlaveConnectionInfo *b_info = *(SlaveConnectionInfo **) b;
@@ -2908,27 +2912,27 @@ compare_slaves (gconstpointer a, gconstpointer b)
 	                  nm_device_get_iface (b_info->device));
 }
 
-static gboolean
+static void
 autoconnect_slaves (NMManager *self,
                     NMSettingsConnection *master_connection,
                     NMDevice *master_device,
                     NMAuthSubject *subject)
 {
 	GError *local_err = NULL;
-	gboolean ret = FALSE;
 
 	if (should_connect_slaves (NM_CONNECTION (master_connection), master_device)) {
-		gs_unref_ptrarray GPtrArray *slaves = NULL;
+		gs_free SlaveConnectionInfo *slaves = NULL;
+		guint n_slaves = 0;
 		guint i;
 
-		slaves = find_slaves (self, master_connection, master_device);
-		if (slaves && slaves->len) {
-			ret = TRUE;
-			g_ptr_array_sort (slaves, compare_slaves);
+		slaves = find_slaves (self, master_connection, master_device, &n_slaves);
+		if (n_slaves > 1) {
+			g_qsort_with_data (slaves, n_slaves, sizeof (slaves[0]),
+			                   compare_slaves, NULL);
 		}
 
-		for (i = 0; slaves && i < slaves->len; i++) {
-			SlaveConnectionInfo *slave = slaves->pdata[i];
+		for (i = 0; i < n_slaves; i++) {
+			SlaveConnectionInfo *slave = &slaves[i];
 			const char *uuid;
 
 			/* To avoid loops when autoconnecting slaves, we propagate
@@ -2982,11 +2986,10 @@ autoconnect_slaves (NMManager *self,
 			                                &local_err);
 			if (local_err) {
 				_LOGW (LOGD_CORE, "Slave connection activation failed: %s", local_err->message);
-				g_error_free (local_err);
+				g_clear_error (&local_err);
 			}
 		}
 	}
-	return ret;
 }
 
 static gboolean
