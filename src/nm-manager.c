@@ -2892,6 +2892,22 @@ out:
 	return FALSE;
 }
 
+static gint
+compare_slaves (gconstpointer a, gconstpointer b)
+{
+	const SlaveConnectionInfo *a_info = *(SlaveConnectionInfo **) a;
+	const SlaveConnectionInfo *b_info = *(SlaveConnectionInfo **) b;
+
+	/* Slaves without a device at the end */
+	if (!a_info->device)
+		return 1;
+	if (!b_info->device)
+		return -1;
+
+	return g_strcmp0 (nm_device_get_iface (a_info->device),
+	                  nm_device_get_iface (b_info->device));
+}
+
 static gboolean
 autoconnect_slaves (NMManager *self,
                     NMSettingsConnection *master_connection,
@@ -2906,7 +2922,10 @@ autoconnect_slaves (NMManager *self,
 		guint i;
 
 		slaves = find_slaves (self, master_connection, master_device);
-		ret = slaves && slaves->len;
+		if (slaves && slaves->len) {
+			ret = TRUE;
+			g_ptr_array_sort (slaves, compare_slaves);
+		}
 
 		for (i = 0; slaves && i < slaves->len; i++) {
 			SlaveConnectionInfo *slave = slaves->pdata[i];
