@@ -1630,33 +1630,56 @@ _check_resconf_immutable (NMDnsManagerResolvConfManager rc_manager)
 	}
 }
 
+static gchar *
+_resconf_path_id (const char *const path) {
+	GFile *f = NULL;
+	GFileInfo *i = NULL;
+	gchar *ret = NULL;
+	
+	f = g_file_new_for_path (_PATH_RESCONF);
+	if (f) {
+		i = g_file_query_info (f,
+		                       G_FILE_ATTRIBUTE_ID_FILE,
+		                       G_FILE_QUERY_INFO_NONE,
+		                       NULL, NULL);
+		if (i) {
+			ret = g_strdup (g_file_info_get_attribute_string (i, G_FILE_ATTRIBUTE_ID_FILE));
+		}
+	}
+
+	g_clear_object (&i);
+	g_clear_object (&f);
+
+	return ret;
+}
+
 static gboolean
 _resolvconf_resolved_managed (void)
 {
-	static const char *const resolved_paths[] = {
+	static const char *const systemd_resconf_paths[] = {
 		"/run/systemd/resolve/resolv.conf",
 		"/lib/systemd/resolv.conf",
 		"/usr/lib/systemd/resolv.conf",
+		NULL
 	};
-	GFile *f;
-	GFileInfo *info;
+	gchar *etc_resconf_id;
 	gboolean ret = FALSE;
 
-	f = g_file_new_for_path (_PATH_RESCONF);
-	info = g_file_query_info (f,
-	                          G_FILE_ATTRIBUTE_STANDARD_IS_SYMLINK","\
-	                          G_FILE_ATTRIBUTE_STANDARD_SYMLINK_TARGET,
-	                          G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
-	                          NULL, NULL);
+	etc_resconf_id = _resconf_path_id (_PATH_RESCONF);
+	for (const char *systemd_resconf_path = systemd_resconf_paths[0]; *systemd_resconf_path; systemd_resconf_path++) {
+		gchar *systemd_resconf_id;
+		int cmp;
 
-	if (info && g_file_info_get_is_symlink (info)) {
-		ret = nm_utils_strv_find_first ((gchar **) resolved_paths,
-		                                G_N_ELEMENTS (resolved_paths),
-		                                g_file_info_get_symlink_target (info)) >= 0;
+		systemd_resconf_id = _resconf_path_id (systemd_resconf_path);
+		cmp = g_strcmp0 (etc_resconf_id, systemd_resconf_id);
+		g_free (systemd_resconf_id);
+
+		if (!cmp && etc_resconf_id && systemd_resconf_id) {
+			ret = TRUE;
+			break;
+		}
 	}
-
-	g_clear_object(&info);
-	g_clear_object(&f);
+	g_free (etc_resconf_id);
 
 	return ret;
 }
