@@ -1630,6 +1630,24 @@ _check_resconf_immutable (NMDnsManagerResolvConfManager rc_manager)
 	}
 }
 
+static char *
+_resconf_path_abs (GFile *resconf, const char *symlink_target) {
+	GFile *resconf_parent = NULL;
+	GFile *resconf_target_abs = NULL;
+	char *result = NULL;
+
+	resconf_parent = g_file_get_parent(resconf);
+	if (resconf_parent) {
+		resconf_target_abs = g_file_resolve_relative_path(resconf_parent, symlink_target);
+		result = g_file_get_path(resconf_target_abs);
+	}
+
+	g_clear_object (&resconf_target_abs);
+	g_clear_object (&resconf_parent);
+
+	return result;
+}
+
 static gboolean
 _resolvconf_resolved_managed (void)
 {
@@ -1640,6 +1658,7 @@ _resolvconf_resolved_managed (void)
 	};
 	GFile *f;
 	GFileInfo *info;
+	char *resconf_path_abs = NULL;
 	gboolean ret = FALSE;
 
 	f = g_file_new_for_path (_PATH_RESCONF);
@@ -1650,11 +1669,15 @@ _resolvconf_resolved_managed (void)
 	                          NULL, NULL);
 
 	if (info && g_file_info_get_is_symlink (info)) {
-		ret = nm_utils_strv_find_first ((gchar **) resolved_paths,
-		                                G_N_ELEMENTS (resolved_paths),
-		                                g_file_info_get_symlink_target (info)) >= 0;
+		resconf_path_abs = _resconf_path_abs (f, g_file_info_get_symlink_target (info));
+		if (resconf_path_abs) {
+			ret = nm_utils_strv_find_first ((gchar **) resolved_paths,
+			                                G_N_ELEMENTS (resolved_paths),
+			                                resconf_path_abs) >= 0;
+		}
 	}
 
+	g_free(resconf_path_abs);
 	g_clear_object(&info);
 	g_clear_object(&f);
 
